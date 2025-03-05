@@ -44,7 +44,7 @@ mtranslate
 catbox-uploader
 gpytranslate
 fal-client
-google-generativeai
+google-genai
 
 # cpython
 cryptg

@@ -6,8 +6,7 @@ from telethon.tl.types import (
     MessageEntityMention,
     MessageEntityMentionName,
 )
-
-import google.generativeai as genai
+from google import genai
 
 from Emilia import db, telethn
 from Emilia.custom_filter import register
@@ -15,9 +14,7 @@ from Emilia.functions.admins import is_admin
 from Emilia.utils.decorators import *
 
 API_KEY = "AIzaSyDH" # Get your API key from Google Gemini API
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash', generation_config=genai.GenerationConfig(temperature=0.9))
-
+client = genai.Client(api_key=API_KEY)
 chatbotdb = db.chatbotto
 
 
@@ -111,7 +108,7 @@ def read_from_file(file_path):
 
 # @rate_limit(10, 60)
 async def chatt(event, query):
-    response = model.generate_content(f"{details}, query: {query}")
+    response = client.models.generate_content(model="gemini-1.5-flash", contents=f"{details}, query: {query}")
     if response:
         return response.text
     return None
