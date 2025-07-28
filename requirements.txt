@@ -19,6 +19,7 @@ html5lib
 # database
 motor
 
+
 git+https://github.com/KurimuzonAkuma/pyrogram.git@v2.1.16 # instead of pyrogram we use updated fork
 telethon
 git-python
@@ -26,7 +27,6 @@ emoji
 emojis
 
 # scrapper
-freeGPT
 bs4
 requests
 lyricsgenius
