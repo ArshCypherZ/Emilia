@@ -1,11 +1,9 @@
-# DONE: Github
-
-from aiohttp import ClientSession
 from pyrogram import Client
 
 from Emilia import custom_filter
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
+from Emilia.utils.async_http import get
 
 
 @usage("/github [username]")
@@ -21,24 +19,24 @@ async def github(_, message):
         return await usage_string(message, github)
     username = message.text.split(None, 1)[1]
     URL = f"https://api.github.com/users/{username}"
-    async with ClientSession() as session:
-        async with session.get(URL) as request:
-            if request.status == 404:
-                return await message.reply_text("404: Not Found")
-            result = await request.json()
 
-            url = result["html_url"]
-            name = result["name"]
-            company = result["company"]
-            bio = result["bio"]
-            created_at = result["created_at"]
-            avatar_url = result["avatar_url"]
-            blog = result["blog"]
-            location = result["location"]
-            repositories = result["public_repos"]
-            followers = result["followers"]
-            following = result["following"]
-            caption = f"""**Github Information of {name}:**
+    r = await get(URL)
+    if r.status_code == 404:
+        return await message.reply_text("404: Not Found")
+    result = r.json()
+
+    url = result["html_url"]
+    name = result["name"]
+    company = result["company"]
+    bio = result["bio"]
+    created_at = result["created_at"]
+    avatar_url = result["avatar_url"]
+    blog = result["blog"]
+    location = result["location"]
+    repositories = result["public_repos"]
+    followers = result["followers"]
+    following = result["following"]
+    caption = f"""**Github Information of {name}:**
 **Username :** `{username}`
 **Bio :** `{bio}`
 **Profile Link :** [Here]({url})

@@ -1,6 +1,5 @@
 import re
-
-from langdetect import detect
+import asyncio
 from pyrogram import Client, enums, filters
 from urlextract import URLExtract
 
@@ -9,16 +8,57 @@ from Emilia.helper.chat_status import check_bot, isUserAdmin
 from Emilia.mongo.locks_mongo import get_allowlist, get_locks, lockwarns_db
 from Emilia.pyro.locks import lock_map
 from Emilia.pyro.warnings.warn import warn
+from Emilia.utils.cache import SimpleCache, approvals_cache
 
 collection = db["approve_d"]
 
+# Compile regex patterns once for better performance
+PHONE_REGEX = re.compile(r"[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]")
+EMAIL_REGEX = re.compile(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+")
+# RTL heuristic: any char within known RTL unicode ranges
+RTL_CHAR_REGEX = re.compile(r"[\u0590-\u08FF\uFB1D-\uFEFC]")
+
+# Cache for URL extractor to avoid recreating it
+URL_EXTRACTOR = URLExtract()
+
+# Small TTL caches for locks/allowlist to reduce DB hits per message
+_locks_cache = SimpleCache(default_ttl=120)
+_allow_cache = SimpleCache(default_ttl=120)
+_lockwarns_cache = SimpleCache(default_ttl=300)
+
+async def _get_locks_cached(chat_id: int):
+    k = f"locks:{chat_id}"
+    v = _locks_cache.get(k)
+    if v is not None:
+        return v
+    data = await get_locks(chat_id)
+    _locks_cache.set(k, data, ttl=120)
+    return data
+
+async def _get_allowlist_cached(chat_id: int):
+    k = f"allow:{chat_id}"
+    v = _allow_cache.get(k)
+    if v is not None:
+        return v
+    data = await get_allowlist(chat_id)
+    _allow_cache.set(k, data, ttl=120)
+    return data
+
+async def _get_lockwarns(chat_id: int) -> bool:
+    k = f"lwarn:{chat_id}"
+    v = _lockwarns_cache.get(k)
+    if v is not None:
+        return v
+    flag = await lockwarns_db(chat_id)
+    _lockwarns_cache.set(k, flag, ttl=300)
+    return flag
 
 @Client.on_message(
     filters.all & (filters.group | filters.channel) | filters.new_chat_members, group=4
 )
 async def locks_checker(client, message):
     chat_id = message.chat.id
-    LOCKS_LIST = await get_locks(chat_id)
+    LOCKS_LIST = await _get_locks_cached(chat_id)
     if len(LOCKS_LIST) == 0:
         return
 
@@ -39,7 +79,7 @@ async def locks_checker(client, message):
                     message, privileges=["can_delete_messages", "can_restrict_members"]
                 ):
                     return
-                if lockwarns_db:
+                if await _get_lockwarns(chat_id):
                     reason = "Bot is locked in this chat."
                     await warn(client, message, reason, warn_user=message)
 
@@ -88,15 +128,15 @@ async def locks_checker(client, message):
 
     if 9 in LOCKS_LIST:
         if message.document:
-            await lock_action(client, message, action=9)
-
+            await lock_action(client, message, action=9)    
+    
     if 10 in LOCKS_LIST:
         if not (message.text or message.caption):
             return
 
         text = message.text or message.caption
-
-        emails = re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", text)
+        # Use compiled regex for better performance
+        emails = EMAIL_REGEX.findall(text)
         if len(emails) != 0:
             await lock_action(client, message, action=10)
 
@@ -106,7 +146,7 @@ async def locks_checker(client, message):
 
     if 12 in LOCKS_LIST:
         if message.forward_date:
-            ALLOW_LIST = await get_allowlist(chat_id)
+            ALLOW_LIST = await _get_allowlist_cached(chat_id)
             if len(ALLOW_LIST) != 0:
                 username = message.from_user.username
                 user_id = message.from_user.user_id
@@ -122,7 +162,7 @@ async def locks_checker(client, message):
 
     if 14 in LOCKS_LIST:
         if message.forward_from_chat and message.forward_from_chat.type == "channel":
-            ALLOW_LIST = await get_allowlist(chat_id)
+            ALLOW_LIST = await _get_allowlist_cached(chat_id)
             if len(ALLOW_LIST) != 0:
                 from_channel_user = message.forward_from_chat.username
                 from_channel_id = message.forward_from_chat.id
@@ -153,7 +193,7 @@ async def locks_checker(client, message):
 
     if 18 in LOCKS_LIST:
         if message.via_bot:
-            ALLOW_LIST = await get_allowlist(chat_id)
+            ALLOW_LIST = await _get_allowlist_cached(chat_id)
             if len(ALLOW_LIST) != 0:
                 via_username = "@" + message.via_bot.username
                 via_user_id = message.via_bot.id
@@ -166,8 +206,8 @@ async def locks_checker(client, message):
     if 19 in LOCKS_LIST:
         if message.text or message.caption:
             text = message.text or message.caption
-            extractor = URLExtract()
-            URL_LIST = extractor.find_urls(text)
+            # Use cached URL extractor for better performance
+            URL_LIST = URL_EXTRACTOR.find_urls(text)
             if len(URL_LIST) == 0:
                 return
 
@@ -183,8 +223,8 @@ async def locks_checker(client, message):
     if 21 in LOCKS_LIST:
         if message.text or message.caption:
             text = message.text or message.caption
-
-            PHONE_NOs_LIST = re.findall(r"[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]", text)
+            # Use compiled regex for better performance
+            PHONE_NOs_LIST = PHONE_REGEX.findall(text)
 
             if len(PHONE_NOs_LIST) != 0:
                 await lock_action(client, message, action=21)
@@ -201,26 +241,8 @@ async def locks_checker(client, message):
         text = message.text or message.caption
 
         if text:
-            RTL_LIST = [
-                "ar",  # Arabic,
-                "dv",  # Divehi
-                "fa",  # Persian (Farsi)
-                "ha",  # Hausa
-                "he",  # Hebrew
-                "iw",  # Hebrew (old code)
-                "ji",  # Yiddish (old code)
-                "ps",  # Pashto, Pushto
-                "ur",  # Urdu
-                "yi",  # Yiddish
-            ]
-            if text.isdigit():
-                return
-            cleaned_text = re.sub(r"[^a-zA-Z ]+", " ", text)
-            try:
-                detected_lang = detect(cleaned_text)
-            except BaseException:
-                return
-            if detected_lang in RTL_LIST:
+            # Lightweight RTL detection via regex on unicode ranges
+            if RTL_CHAR_REGEX.search(text) and not text.isdigit():
                 await lock_action(client, message, action=24)
 
     if 25 in LOCKS_LIST:
@@ -235,11 +257,10 @@ async def locks_checker(client, message):
         text = message.text or message.caption
 
         if text:
-            extractor = URLExtract()
-            URL_LIST = extractor.find_urls(text)
-            ALLOW_LIST = await get_allowlist(chat_id)
+            # Use cached URL extractor for better performance
+            URL_LIST = URL_EXTRACTOR.find_urls(text)
             if len(URL_LIST) != 0:
-                ALLOW_LIST = await get_allowlist(chat_id)
+                ALLOW_LIST = await _get_allowlist_cached(chat_id)
                 if len(ALLOW_LIST) != 0:
                     for url in URL_LIST:
                         if url not in ALLOW_LIST:
@@ -265,15 +286,21 @@ async def lock_action(client, message, action: int = None, delete: bool = True):
     lock_name = lock_map.LocksMap(action).name
     if await isUserAdmin(message, silent=True):
         return
-    if await collection.find_one(
-        {"user_id": message.from_user.id, "chat_id": message.chat.id}
-    ):
-        return
+    # approvals TTL cache
+    uid = message.sender_chat.id if getattr(message, "sender_chat", None) else (message.from_user.id if message.from_user else None)
+    if uid is not None:
+        key = f"appr:{message.chat.id}:{uid}"
+        cached = approvals_cache.get(key)
+        if cached is None:
+            cached = await collection.find_one({"user_id": uid, "chat_id": message.chat.id}) is not None
+            approvals_cache.set(key, cached, ttl=180)
+        if cached:
+            return
     if not await check_bot(
         message, privileges=["can_delete_messages", "can_restrict_members"]
     ):
         return
-    if lockwarns_db:
+    if await _get_lockwarns(message.chat.id):
         reason = f"{lock_name} is locked in this chat."
         await warn(client, message, reason, warn_user=message)
     if delete:

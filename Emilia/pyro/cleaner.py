@@ -10,7 +10,7 @@ cleanerdb = db.cleaner
 
 
 async def cleanblue_on(chat_id: int):
-    return await cleanerdb.insert_one({"chat_id": chat_id})
+    return await cleanerdb.update_one({"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True)
 
 
 async def cleanblue_off(chat_id: int):

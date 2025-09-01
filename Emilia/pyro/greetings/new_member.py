@@ -4,7 +4,7 @@ from pyrogram import Client, filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatMemberUpdated, ChatPermissions, InlineKeyboardMarkup
 
-from Emilia import BOT_ID, DEV_USERS, UPDATE_CHANNEL, SUPPORT_CHAT, ORIGINAL_EVENT_LOOP
+from Emilia import BOT_ID, DEV_USERS, UPDATE_CHANNEL, SUPPORT_CHAT, IS_CLONE
 from Emilia import EVENT_LOGS as LOG_CHANNEL
 from Emilia import OWNER_ID, pgram
 from Emilia.helper.button_gen import button_markdown_parser
@@ -28,6 +28,7 @@ from Emilia.mongo.welcome_mongo import (
 from Emilia.pyro.greetings.captcha import button_captcha, text_captcha
 from Emilia.utils.decorators import *
 from Emilia.utils.decorators import logging
+from Emilia.utils.auth import is_owner, is_dev
 
 
 @Client.on_chat_member_updated(filters.group, group=690)
@@ -66,8 +67,8 @@ async def NewMemeber(client: Client, message: ChatMemberUpdated):
 
     # Emilia Welcome stuffs
     if user_id == BOT_ID:
-        if not ORIGINAL_EVENT_LOOP:
-            await pgram.send_message(chat_id=chat_id, text="🚀 Welcome! You've just added a clone of the incredible @Elf_Robot. Thanks for choosing us! 🙌")
+        if IS_CLONE:
+            await pgram.send_message(chat_id=chat_id, text="Welcome! You've just added a clone of the incredible @Elf_Robot. Thanks for choosing us! 🙌")
             return
         await pgram.send_message(
             chat_id=chat_id,
@@ -88,14 +89,14 @@ async def NewMemeber(client: Client, message: ChatMemberUpdated):
         return
 
     # Emilia's Special welcome for kami-samas!
-    if user_id == OWNER_ID:
+    if is_owner(user_id):
         await pgram.send_message(
             chat_id=chat_id, text="Omfg, the old man's here. I'm scared! >.<"
         )
         return "WELCOME_BOT_OWNER", user_id, NewUserJson.first_name
 
     # Emilia's Special welcome for her onii-chan gang!
-    if user_id in DEV_USERS:
+    if is_dev(user_id):
         await pgram.send_message(chat_id=chat_id, text="Onii-chan is here owo!")
         return "WELCOME_DEV", user_id, NewUserJson.first_name
 

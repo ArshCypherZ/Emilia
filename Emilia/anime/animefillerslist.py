@@ -31,14 +31,14 @@ async def fillers_cmd(client: Client, message: Message, mdata: dict):
             """Give some anime name to search fillers for
 example: /fillers Detective Conan"""
         )
-    k = search_filler(qry[1])
+    k = await search_filler(qry[1])
     if k == {}:
         await message.reply_text("No fillers found for the given anime...")
         return
     button = []
     list_ = list(k.keys())
     if len(list_) == 1:
-        result = parse_filler(k.get(list_[0]))
+        result = await parse_filler(k.get(list_[0]))
         msg = ""
         msg += f"Fillers for anime `{list_[0]}`\n\nManga Canon episodes:\n"
         msg += str(result.get("total_ep"))
@@ -65,7 +65,7 @@ example: /fillers Detective Conan"""
 @check_user
 async def filler_btn(client: Client, cq: CallbackQuery, cdata: dict):
     kek, req, user = cdata["data"].split("_")
-    result = parse_filler((FILLERS.get(req))[0])
+    result = await parse_filler((FILLERS.get(req))[0])
     msg = ""
     msg += f"**Fillers for anime** `{(FILLERS.get(req))[1]}`"
     msg += "\n\n**Manga Canon episodes:**\n"

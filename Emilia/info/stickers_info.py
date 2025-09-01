@@ -15,5 +15,4 @@ Sticker module helps you to make your own pack of stickers and even steal other 
 • /unkang: reply to sticker which is in your pack to delete it from your pack.
 • /pkang or /packkang: reply to sticker pack to kang (steal) the whole pack into your own pack.
 
-• /stickers: Find stickers for given term on combot sticker catalogue
 """

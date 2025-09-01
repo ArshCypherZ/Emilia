@@ -1,5 +1,3 @@
-# DONE: Admins
-
 import asyncio
 import time
 from asyncio import sleep
@@ -33,50 +31,70 @@ async def find_instance(items, class_or_tuple):
 
 
 async def get_user_reason(event):
-    args = event.text.split(" ", maxsplit=1)
+    # Prefer raw_text to preserve exact spacing/entity offsets
+    text = getattr(event, "raw_text", event.text)
 
+    # Default return values
     user_input = None
     extra = None
-    users = None
 
+    # If replying to a user, use the replied sender as target. Optional extra is the rest of the command text
     if event.reply_to_msg_id:
         previous_message = await event.get_reply_message()
         try:
             user_input = await meow.get_entity(previous_message.sender_id)
         except errors.FloodWaitError as e:
             await sleep(e.seconds)
+        # Extra is anything after the command itself
+        parts = text.split(None, 1)
+        extra = parts[1] if len(parts) >= 2 else None
+        return user_input, extra
 
-        extra = args[1] if len(args) >= 2 else None
+    # Not a reply: try to resolve using entities first (supports mentions with spaces)
+    entities = getattr(getattr(event, "message", event), "entities", None) or event.entities
+    if entities:
+        ent = await find_instance(entities, (MessageEntityMentionName, MessageEntityMention))
+        if ent:
+            users = None
+            if isinstance(ent, MessageEntityMentionName):
+                users = ent.user_id
+            elif isinstance(ent, MessageEntityMention):
+                token = text[ent.offset : ent.offset + ent.length]
+                users = token
+            if users is not None:
+                try:
+                    user_input = await meow.get_entity(ctypeof(users))
+                except (TypeError, ValueError):
+                    user_input = None
+                except errors.FloodWaitError as e:
+                    await sleep(e.seconds)
 
-    elif len(args) > 1:
-        args = event.text.split(" ", maxsplit=2)
-        extra = args[2] if len(args) > 2 else None
-        user_input = args[1]
+                after_idx = ent.offset + ent.length
+                extra_text = text[after_idx:].strip()
+                extra = extra_text if extra_text else None
 
-        if user_input.isnumeric():
-            users = int(user_input)
+                if user_input is not None:
+                    return user_input, extra
 
-        elif event.entities:
-            for entity in event.entities:
-                if isinstance(entity, MessageEntityMentionName):
-                    users = entity.user_id
-                if isinstance(entity, MessageEntityMention):
-                    users = args[1]
+    parts = text.split(None, 2)
+    if len(parts) > 1:
+        user_token = parts[1]
+        extra = parts[2] if len(parts) > 2 else None
 
-        if users:
-            try:
-                user_input = await meow.get_entity(ctypeof(users))
-            except (TypeError, ValueError):
-                pass
-            except errors.FloodWaitError as e:
-                await sleep(e.seconds)
-
-        else:
+        try:
+            if user_token.isnumeric():
+                user_input = await meow.get_entity(int(user_token))
+            else:
+                user_input = await meow.get_entity(user_token)
+        except (TypeError, ValueError):
             return None, None
-    else:
-        return None, None
+        except errors.FloodWaitError as e:
+            await sleep(e.seconds)
+        except Exception:
+            return None, None
+        return user_input, extra
 
-    return user_input, extra
+    return None, None
 
 
 async def get_extra_args(event):
@@ -112,27 +130,38 @@ async def extract_time(message, time_val):
 
 
 async def get_time(time: int):
-    if time < 60:
-        return f"{time} second{'s' if time != 1 else ''}"
+    """Return a human-readable duration string.
+    Tolerates None/invalid values by treating them as 0 seconds.
+    """
+    try:
+        t = int(time)
+    except Exception:
+        t = 0
+    if t < 0:
+        t = 0
+
+    if t < 60:
+        return f"{t} second{'s' if t != 1 else ''}"
 
     time_units = [("day", 86400), ("hour", 3600), ("minute", 60)]
     time_parts = []
 
     for unit, divisor in time_units:
-        if time >= divisor:
-            count = time // divisor
-            time %= divisor
+        if t >= divisor:
+            count = t // divisor
+            t %= divisor
             time_parts.append(f"{count} {unit}{'s' if count != 1 else ''}")
 
-    if time > 0:
-        time_parts.append(f"{time} second{'s' if time != 1 else ''}")
+    if t > 0:
+        time_parts.append(f"{t} second{'s' if t != 1 else ''}")
 
     return " ".join(time_parts)
 
 
-async def can_add_admins(event, user_id):
+async def can_add_admins(event, user_id, chat_id=None):
     try:
-        p = await meow(GetParticipantRequest(event.chat_id, user_id))
+        target_chat = chat_id if chat_id is not None else event.chat_id
+        p = await meow(GetParticipantRequest(target_chat, user_id))
     except UserNotParticipantError:
         return False
 
@@ -325,35 +354,39 @@ async def can_delete_msg(event, user_id):
 
 
 @exception
-async def is_admin(event, user_id, pm_mode: bool = False):
+async def is_admin(event, user_id, pm_mode: bool = False, chat_id=None):
 
-    chat_id = event.chat_id
+    # Determine target chat context
+    target_chat = chat_id if chat_id is not None else event.chat_id
 
-    if not pm_mode:
-        if event.is_private:
-            return True
+    # Preserve legacy behavior: in PM and no explicit chat provided, treat as admin unless pm_mode is True
+    if not pm_mode and getattr(event, "is_private", False) and chat_id is None:
+        return True
 
     cached_admin_status = await get_admin_cache(event, user_id)
-    if cached_admin_status is not None:
+    if cached_admin_status is not None and chat_id is None:
+        # Only use cache when operating on event.chat_id
         return cached_admin_status
 
     try:
-        p = await meow(GetParticipantRequest(chat_id, user_id))
+        p = await meow(GetParticipantRequest(target_chat, user_id))
     except UserNotParticipantError:
         return False
 
-    is_admin = isinstance(p.participant, types.ChannelParticipantAdmin) or isinstance(
-        p.participant, types.ChannelParticipantCreator
-    )
+    is_admin_flag = isinstance(
+        p.participant, types.ChannelParticipantAdmin
+    ) or isinstance(p.participant, types.ChannelParticipantCreator)
 
-    await update_admin_cache(chat_id, user_id, is_admin)
+    if chat_id is None:
+        await update_admin_cache(target_chat, user_id, is_admin_flag)
 
-    return is_admin
+    return is_admin_flag
 
 
 async def get_admin_cache(event, user_id):
+    # projection to reduce payload; normalize chat_id/user_id types
     cache_data = await cache_collection.find_one(
-        {"chat_id": event.chat_id, "user_id": user_id}
+        {"chat_id": int(event.chat_id), "user_id": int(user_id)}, {"is_admin": 1}
     )
     if cache_data:
         return cache_data["is_admin"]
@@ -403,30 +436,86 @@ async def can_manage_topics(event, user_id):
 
 
 async def update_cache_periodically():
+    """Periodically update admin cache - runs as a background task"""
     while True:
-        cursor = cache_collection.find({})
-        async for entry in cursor:
-            chat_id = entry["chat_id"]
-            user_id = int(entry["user_id"])
+        try:
+            # Process in batches to avoid blocking the event loop
+            batch_size = 200
+            cursor = cache_collection.find({}, {"chat_id": 1, "user_id": 1}, batch_size=500)
+            batch = []
+            
+            async for entry in cursor:
+                batch.append(entry)
+                
+                if len(batch) >= batch_size:
+                    # Process batch
+                    await process_admin_cache_batch(batch)
+                    batch = []
+                    # Yield control to event loop between batches
+                    try:
+                        await asyncio.sleep(0.1)
+                    except asyncio.CancelledError:
+                        LOGGER.info("Admin cache update task cancelled.")
+                        return
+            
+            # Process remaining entries
+            if batch:
+                await process_admin_cache_batch(batch)
+                
+        except asyncio.CancelledError:
+            LOGGER.info("Admin cache update task cancelled.")
+            break
+        except Exception as e:
+            LOGGER.error(f"Error in admin cache update periodic task: {e}")
+            
+        try:
+            await asyncio.sleep(600)  # 10 minutes
+        except asyncio.CancelledError:
+            LOGGER.info("Admin cache update task cancelled during sleep.")
+            break
 
-            try:
-                p = await meow(GetParticipantRequest(chat_id, user_id))
-                is_admin = isinstance(
-                    p.participant, types.ChannelParticipantAdmin
-                ) or isinstance(p.participant, types.ChannelParticipantCreator)
-                await update_admin_cache(chat_id, user_id, is_admin)
-            except UserNotParticipantError:
-                pass
-            except ValueError:
-                pass
-            except errors.ChatAdminRequiredError:
-                pass
-            except errors.ChannelPrivateError:
-                pass
-            except Exception as e:
-                LOGGER.error("Error in admin cache periodically:", e)
 
-        await asyncio.sleep(600)  # 10 minutes
+async def process_admin_cache_batch(batch):
+    """Process a batch of admin cache entries"""
+    for entry in batch:
+        chat_id = entry["chat_id"]
+        user_id = int(entry["user_id"])
+
+        try:
+            p = await meow(GetParticipantRequest(chat_id, user_id))
+            is_admin = isinstance(
+                p.participant, types.ChannelParticipantAdmin
+            ) or isinstance(p.participant, types.ChannelParticipantCreator)
+            await update_admin_cache(chat_id, user_id, is_admin)
+        except UserNotParticipantError:
+            pass
+        except ValueError:
+            pass
+        except errors.ChatAdminRequiredError:
+            pass
+        except errors.ChannelPrivateError:
+            pass
+        except asyncio.CancelledError:
+            # Task was cancelled, stop processing
+            break
+        except Exception as e:
+            LOGGER.error(f"Error updating admin cache for {user_id}: {e}")
+            
+        # Small delay between each user to avoid rate limits
+        try:
+            await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            break
 
 
-asyncio.get_event_loop().create_task(update_cache_periodically())
+async def start_admin_cache_task():
+    """Start the admin cache update task - should be called during startup"""
+    try:
+        asyncio.create_task(update_cache_periodically())
+        LOGGER.info("Admin cache update task started successfully.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start admin cache update task: {e}")
+
+
+# Don't start the task at import time - it will be started in main()
+# This prevents the "asyncio event loop must not change after connection" error

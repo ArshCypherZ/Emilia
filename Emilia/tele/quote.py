@@ -1,7 +1,7 @@
 import base64
 import random
 
-from requests import post
+from Emilia.utils.async_http import post
 from telethon import Button, types
 from webcolors import hex_to_name, name_to_hex
 
@@ -205,7 +205,7 @@ async def _quotly_api_(e):
         "scale": 2,
         "messages": messages,
     }
-    req = post(
+    req = await post(
         "https://quoteapi-aqac.onrender.com/generate",
         json=post_data,
     )
@@ -218,7 +218,6 @@ async def _quotly_api_(e):
     else:
         buttons = None
     try:
-        LOGGER.error(req.json())
         fq = req.json()["result"]["image"]
         buffer = base64.b64decode(fq.encode("utf-8"))
         (

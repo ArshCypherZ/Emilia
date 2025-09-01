@@ -27,7 +27,7 @@ async def _(event):
         return
 
     if not event.is_reply:
-        return usage_string(event, _)
+        return await usage_string(event, _)
     if event.is_group:
         if not (await is_admin(event, event.sender_id)):
             return await event.reply(strings.NOT_ADMIN)
@@ -82,7 +82,7 @@ async def _(event):
         return
 
     if not event.is_reply:
-        return usage_string(event, _)
+        return await usage_string(event, _)
     if event.is_group:
         if not (await is_admin(event, event.sender_id)):
             return await event.reply(strings.NOT_ADMIN)

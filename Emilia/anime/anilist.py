@@ -4,7 +4,7 @@ import random
 import re
 import time
 
-import requests
+from Emilia.utils.async_http import post
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMemberStatus, ChatType
 from pyrogram.errors import UserNotParticipant, WebpageCurlFailed, WebpageMediaEmpty
@@ -66,11 +66,9 @@ from Emilia.utils.helper import rand_key
 GROUPS = get_collection("GROUPS")
 SFW_GRPS = get_collection("SFW_GROUPS")
 DC = get_collection("DISABLED_CMDS")
-AG = get_collection("AIRING_GROUPS")
-CG = get_collection("CRUNCHY_GROUPS")
 SG = get_collection("SUBSPLEASE_GROUPS")
-HD = get_collection("HEADLINES_GROUPS")
 MHD = get_collection("MAL_HEADLINES_GROUPS")
+GUI = get_collection("GROUP_UI")
 CHAT_DEV_USERS = ChatMemberStatus.OWNER
 MEMBER = ChatMemberStatus.MEMBER
 ADMINISTRATOR = ChatMemberStatus.ADMINISTRATOR
@@ -577,10 +575,6 @@ setting_text = """
 
 NSFW toggle switches on filtering of 18+ marked content
 
-Airing notifications notifies about airing of anime in recent
-
-Crunchyroll updates will toggle notifications about release of animes on crunchyroll site
-
 Subsplease updates will toggle notifications about release of animes on subsplease site
 
 Click Headlines button to enable headlines. You can choose from given sources"""
@@ -610,12 +604,6 @@ async def settings_cmd(client: Client, message: Message, mdata: dict):
         sfw = "NSFW: Allowed"
         if await SFW_GRPS.find_one({"id": cid}):
             sfw = "NSFW: Not Allowed"
-        notif = "Airing notifications: OFF"
-        if await AG.find_one({"_id": cid}):
-            notif = "Airing notifications: ON"
-        cr = "Crunchyroll Updates: OFF"
-        if await CG.find_one({"_id": cid}):
-            cr = "Crunchyroll Updates: ON"
         sp = "Subsplease Updates: OFF"
         if await SG.find_one({"_id": cid}):
             sp = "Subsplease Updates: ON"
@@ -628,12 +616,6 @@ async def settings_cmd(client: Client, message: Message, mdata: dict):
                             text=sfw, callback_data=f"settogl_sfw_{cid}"
                         )
                     ],
-                    [
-                        InlineKeyboardButton(
-                            text=notif, callback_data=f"settogl_notif_{cid}"
-                        )
-                    ],
-                    [InlineKeyboardButton(text=cr, callback_data=f"settogl_cr_{cid}")],
                     [InlineKeyboardButton(text=sp, callback_data=f"settogl_sp_{cid}")],
                     [
                         InlineKeyboardButton(
@@ -679,11 +661,16 @@ async def code_cmd(code: str, message: Message):
             """You have already authorized yourself
 If you wish to logout send /logout"""
         )
-    response: dict = requests.post(
+    response_obj = await post(
         "https://anilist.co/api/v2/oauth/token", headers=headers, json=json
-    ).json()
+    )
+    response: dict = response_obj.json()
     if response.get("access_token"):
-        await AUTH_USERS.insert_one({"id": us_, "token": response.get("access_token")})
+        await AUTH_USERS.update_one(
+            {"id": us_},
+            {"$set": {"id": us_, "token": response.get("access_token")}},
+            upsert=True,
+        )
         await message.reply_text("Authorization Successfull!!!")
     else:
         await message.reply_text(
@@ -1072,14 +1059,6 @@ async def nsfw_toggle_btn(client: Client, cq: CallbackQuery):
         sfw = "NSFW: Not Allowed"
     else:
         sfw = "NSFW: Allowed"
-    if await AG.find_one({"_id": int(query[2])}):
-        notif = "Airing notifications: ON"
-    else:
-        notif = "Airing notifications: OFF"
-    if await CG.find_one({"_id": int(query[2])}):
-        cr = "Crunchyroll Updates: ON"
-    else:
-        cr = "Crunchyroll Updates: OFF"
     if await SG.find_one({"_id": int(query[2])}):
         sp = "Subsplease Updates: ON"
     else:
@@ -1089,38 +1068,20 @@ async def nsfw_toggle_btn(client: Client, cq: CallbackQuery):
             await SFW_GRPS.find_one_and_delete({"id": int(query[2])})
             sfw = "NSFW: Allowed"
         else:
-            await SFW_GRPS.insert_one({"id": int(query[2])})
+            # Idempotent toggle using upsert
+            await SFW_GRPS.update_one({"id": int(query[2])}, {"$setOnInsert": {"id": int(query[2])}}, upsert=True)
             sfw = "NSFW: Not Allowed"
-    if query[1] == "notif":
-        if await AG.find_one({"_id": int(query[2])}):
-            await AG.find_one_and_delete({"_id": int(query[2])})
-            notif = "Airing notifications: OFF"
-        else:
-            await AG.insert_one({"_id": int(query[2])})
-            notif = "Airing notifications: ON"
-    if query[1] == "cr":
-        if await CG.find_one({"_id": int(query[2])}):
-            await CG.find_one_and_delete({"_id": int(query[2])})
-            cr = "Crunchyroll Updates: OFF"
-        else:
-            await CG.insert_one({"_id": int(query[2])})
-            cr = "Crunchyroll Updates: ON"
     if query[1] == "sp":
         if await SG.find_one({"_id": int(query[2])}):
             await SG.find_one_and_delete({"_id": int(query[2])})
             sp = "Subsplease Updates: OFF"
         else:
-            await SG.insert_one({"_id": int(query[2])})
+            # Idempotent toggle using upsert
+            await SG.update_one({"_id": int(query[2])}, {"$setOnInsert": {"_id": int(query[2])}}, upsert=True)
             sp = "Subsplease Updates: ON"
     btns = InlineKeyboardMarkup(
         [
             [InlineKeyboardButton(text=sfw, callback_data=f"settogl_sfw_{query[2]}")],
-            [
-                InlineKeyboardButton(
-                    text=notif, callback_data=f"settogl_notif_{query[2]}"
-                )
-            ],
-            [InlineKeyboardButton(text=cr, callback_data=f"settogl_cr_{query[2]}")],
             [InlineKeyboardButton(text=sp, callback_data=f"settogl_sp_{query[2]}")],
             [
                 InlineKeyboardButton(
@@ -1137,7 +1098,6 @@ async def nsfw_toggle_btn(client: Client, cq: CallbackQuery):
     await cq.answer()
     if query[1] == "call":
         await cq.edit_message_text(text=setting_text, reply_markup=btns)
-    await cq.edit_message_reply_markup(reply_markup=btns)
 
 
 @Client.on_callback_query(filters.regex(pattern=r"myacc_(.*)"))
@@ -1773,7 +1733,6 @@ async def featured_in_switch_btn(client: Client, cq: CallbackQuery, cdata: dict)
 
 
 headlines_text = """
-Turn LiveChart option on to get news feeds from livechart.me
 Turn MyAnimeList option on to get news feeds from myanimelist.net
 
 For Auto Pin and Auto Unpin features, give the bot "Pin Message" and "Delete Message" perms
@@ -1796,19 +1755,10 @@ async def headlines_btn(client: Client, cq: CallbackQuery):
             "You don't have enough permissions to change this!!!", show_alert=True
         )
         return
-    lcdata = await HD.find_one({"_id": gid})
     maldata = await MHD.find_one({"_id": gid})
-    lchd = "LiveChart: OFF"
     malhd = "MyAnimeList: OFF"
-    malhdpin = lchdpin = "Auto Pin: OFF"
-    malpin = lcpin = None
-    if lcdata:
-        lchd = "LiveChart: ON"
-        try:
-            lcpin = lcdata["pin"]
-            lchdpin = f"Auto Pin: {lcpin}"
-        except KeyError:
-            pass
+    malhdpin = "Auto Pin: OFF"
+    malpin = None
     if maldata:
         malhd = "MyAnimeList: ON"
         try:
@@ -1816,30 +1766,24 @@ async def headlines_btn(client: Client, cq: CallbackQuery):
             malhdpin = f"Auto Pin: {malpin}"
         except KeyError:
             pass
-    if "mal" in qry:
-        data = maldata
-        pin = malpin
-        pin_msg = malhdpin
-        collection = MHD
-        src_status = malhd
-        srcname = "MyAnimeList"
-    else:
-        data = lcdata
-        pin = lcpin
-        pin_msg = lchdpin
-        collection = HD
-        src_status = lchd
-        srcname = "LiveChart"
-    if re.match(r"^(mal|lc)hd$", qry):
+
+    data = maldata
+    pin = malpin
+    pin_msg = malhdpin
+    collection = MHD
+    src_status = malhd
+    srcname = "MyAnimeList"
+
+    if re.match(r"^malhd$", qry):
         if data:
             await collection.find_one_and_delete(data)
             src_status = f"{srcname}: OFF"
             pin_msg = f"Auto Pin: OFF"
         else:
-            await collection.insert_one({"_id": gid})
+            await collection.update_one({"_id": gid}, {"$setOnInsert": {"_id": gid}}, upsert=True)
             src_status = f"{srcname}: ON"
             pin_msg = f"Auto Pin: OFF"
-    if re.match(r"^(mal|lc)hdpin$", qry):
+    if re.match(r"^malhdpin$", qry):
         if data:
             if pin:
                 switch = "ON" if pin == "OFF" else "OFF"
@@ -1854,23 +1798,12 @@ async def headlines_btn(client: Client, cq: CallbackQuery):
                 pin_msg = f"Auto Pin: ON"
         else:
             await cq.answer(f"Please enable {srcname} first!!!", show_alert=True)
-    if "mal" in qry:
-        malhdpin = pin_msg
-        malhd = src_status
-    else:
-        lchdpin = pin_msg
-        lchd = src_status
+
+    malhdpin = pin_msg
+    malhd = src_status
+
     btn = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(text=lchd, callback_data=f"headlines_lchd_{gid}")],
-            [
-                InlineKeyboardButton(
-                    text=lchdpin, callback_data=f"headlines_lchdpin_{gid}"
-                ),
-                InlineKeyboardButton(
-                    text="Auto Unpin (LC)", callback_data=f"unpin_call_lc_{gid}"
-                ),
-            ],
             [InlineKeyboardButton(text=malhd, callback_data=f"headlines_malhd_{gid}")],
             [
                 InlineKeyboardButton(
@@ -1915,12 +1848,8 @@ async def auto_unpin(client: Client, cq: CallbackQuery):
         )
         return
     cancel = False
-    if src == "lc":
-        srcname = "LiveChart"
-        collection = HD
-    else:
-        srcname = "MyAnimeList"
-        collection = MHD
+    srcname = "MyAnimeList"
+    collection = MHD
     data = await collection.find_one({"_id": gid})
     if data:
         try:
@@ -1957,27 +1886,33 @@ async def auto_unpin(client: Client, cq: CallbackQuery):
     count = 0
     for i in TIMES.keys():
         count = count + 1
-        row.append(
-            InlineKeyboardButton(i, callback_data=f"unpin_{TIMES[i]}_{src}_{gid}")
-        )
+        if i == "New Feed":
+            row.append(
+                InlineKeyboardButton(
+                    text=i, callback_data=f"unpin_0_mal_{gid}"
+                )
+            )
+        else:
+            if i == "OFF":
+                row.append(
+                    InlineKeyboardButton(
+                        text=i, callback_data=f"unpin_None_mal_{gid}"
+                    )
+                )
+            else:
+                row.append(
+                    InlineKeyboardButton(
+                        text=i, callback_data=f"unpin_{TIMES[i]}_mal_{gid}"
+                    )
+                )
         if count == 3:
             btn.append(row)
-            count = 0
             row = []
-    if len(row) != 0:
+            count = 0
+    if row != []:
         btn.append(row)
-    btn.append([InlineKeyboardButton("Back", callback_data=f"headlines_call_{gid}")])
-    if isinstance(unpin, int):
-        if unpin == 0:
-            unpindata = "after Next Feed"
-        else:
-            unpindata = "after " + list(TIMES.keys())[list(TIMES.values()).index(unpin)]
-    else:
-        unpindata = "OFF"
-    await cq.edit_message_text(
-        f"Auto Unpin options for {srcname}\nCurrently set to: {unpindata}",
-        reply_markup=InlineKeyboardMarkup(btn),
-    )
+    btn.append([InlineKeyboardButton(text="Back", callback_data=f"headlines_malhd_{gid}")])
+    await cq.edit_message_text("Select a time for auto unpin:", reply_markup=InlineKeyboardMarkup(btn))
     await cq.answer()
 
 
@@ -2018,7 +1953,8 @@ async def change_ui_btn(client: Client, cq: CallbackQuery):
         if await GUI.find_one({"_id": gid}):
             await GUI.update_one({"_id": gid}, {"$set": {"cs": qry}})
         else:
-            await GUI.insert_one({"_id": gid, "bl": "➤", "cs": qry})
+            # Idempotent create for UI settings
+            await GUI.update_one({"_id": gid}, {"$setOnInsert": {"bl": "➤", "cs": qry}}, upsert=True)
     elif qry != "call":
         bullet = qry
         if qry == "None":
@@ -2026,7 +1962,8 @@ async def change_ui_btn(client: Client, cq: CallbackQuery):
         if await GUI.find_one({"_id": gid}):
             await GUI.update_one({"_id": gid}, {"$set": {"bl": bullet}})
         else:
-            await GUI.insert_one({"_id": gid, "bl": bullet, "cs": "UPPER"})
+            # Idempotent create for UI settings
+            await GUI.update_one({"_id": gid}, {"$setOnInsert": {"bl": bullet, "cs": "UPPER"}}, upsert=True)
     bl = "➤"
     cs = "UPPER"
     if await GUI.find_one({"_id": gid}):

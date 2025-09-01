@@ -1,5 +1,3 @@
-# DONE: Ping
-
 import time
 
 from Emilia.custom_filter import register

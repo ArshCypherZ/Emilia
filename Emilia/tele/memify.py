@@ -27,9 +27,11 @@ async def handler(event):
         return await event.reply("```Reply to a image/sticker.```")
     file = await bot.download_media(reply_message)
     msg = await event.reply("```Memifying this image!```")
-    text = event.text.split(None, 1)[1]
+    parts = event.text.split(None, 1)
+    text = parts[1] if len(parts) > 1 else ""
     if len(text) < 1:
-        return await msg.edit("You might want to try `/mmf text`")
+        await msg.edit("You might want to try `/mmf text`")
+        return
     try:
         meme = await drawText(file, text)
         await bot.send_file(event.chat_id, file=meme, force_document=False)
@@ -56,7 +58,9 @@ async def drawText(image_path, text):
     current_h, pad = 10, 5
     if upper_text:
         for u_text in textwrap.wrap(upper_text, width=15):
-            u_width, u_height = draw.textsize(u_text, font=m_font)
+            # textsize deprecated in Pillow 10+; use textbbox to measure
+            u_bbox = draw.textbbox((0, 0), u_text, font=m_font)
+            u_width, u_height = (u_bbox[2] - u_bbox[0], u_bbox[3] - u_bbox[1])
             draw.text(
                 xy=(((i_width - u_width) / 2) - 2, int((current_h / 640) * i_width)),
                 text=u_text,
@@ -91,7 +95,8 @@ async def drawText(image_path, text):
             current_h += u_height + pad
     if lower_text:
         for l_text in textwrap.wrap(lower_text, width=15):
-            u_width, u_height = draw.textsize(l_text, font=m_font)
+            l_bbox = draw.textbbox((0, 0), l_text, font=m_font)
+            u_width, u_height = (l_bbox[2] - l_bbox[0], l_bbox[3] - l_bbox[1])
             draw.text(
                 xy=(
                     ((i_width - u_width) / 2) - 2,

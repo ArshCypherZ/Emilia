@@ -1,5 +1,3 @@
-# DONE: Antiflood
-
 from asyncio import sleep
 from datetime import datetime, timedelta
 
@@ -7,15 +5,15 @@ from pyrogram import Client, enums, filters
 from pyrogram.types import ChatPermissions, Message
 
 import Emilia.strings as strings
-from Emilia import custom_filter, db, pgram
+from Emilia import custom_filter, db, pgram, LOGGER
 from Emilia.helper.chat_status import isBotCan, isUserAdmin
 from Emilia.helper.time_checker import *
 from Emilia.pyro.connection.connection import connection
 from Emilia.utils.decorators import *
+from Emilia.utils.cache import SimpleCache, approvals_cache
 
 DB = db.antiflood_chats
 collection = db.flood_msgs
-
 
 async def flood_limits(chat_id: int):
     limit = await DB.find_one({"chat_id": chat_id})
@@ -31,6 +29,27 @@ async def flood_limits(chat_id: int):
 
     return chat_limit, timed_limit, timed_duration, action, clear_flood, None
 
+# Small TTL caches
+_flood_status_cache = SimpleCache(default_ttl=60)
+
+async def _check_flood_on_cached(chat_id: int) -> bool:
+    k = f"flood_on:{chat_id}"
+    v = _flood_status_cache.get(k)
+    if v is not None:
+        return v
+    meow = await DB.find_one({"chat_id": chat_id})
+    on = bool(meow and "status" in meow and meow["status"] != "off")
+    _flood_status_cache.set(k, on, ttl=60)
+    return on
+
+async def _is_approved_cached(chat_id: int, user_id: int) -> bool:
+    key = f"appr:{chat_id}:{user_id}"
+    val = approvals_cache.get(key)
+    if val is not None:
+        return val
+    is_approved = await db["approve_d"].find_one({"user_id": user_id, "chat_id": chat_id}) is not None
+    approvals_cache.set(key, is_approved, ttl=180)
+    return is_approved
 
 async def check_flood_on(chat_id: int):
     meow = await DB.find_one({"chat_id": chat_id})
@@ -215,9 +234,6 @@ async def antiflood_func(client, message: Message):
         await message.reply("Usage: /antiflood [on/off]")
 
 
-# /floodmode <action type>: Choose which action to take on a user who has been flooding. Possible actions: ban/mute/kick/tban/tmute
-
-
 @usage("/floodmode [action type]")
 @description(
     "Choose which action to take on a user who has been flooding. Possible actions: ban/mute/kick/tban/tmute"
@@ -293,10 +309,6 @@ async def floodmode(client, message):
     )
     await message.reply(f"Action to take on flooding users is now set to {action}.")
     return "SET_FLOOD_ACTION", None, None
-
-
-# clearflood <yes/no/on/off>: Whether to delete the messages that
-# triggered the flood.
 
 
 @usage("/clearflood [yes/no/on/off]")
@@ -426,8 +438,8 @@ async def handle_flood(message, user_id: int, chat_id: int):
                 ):
                     try:
                         await pgram.delete_messages(chat_id, doc["msg_id"])
-                    except:
-                        pass
+                    except Exception as e:
+                        LOGGER.warning(f"antiflood: failed to delete flood msg {doc.get('msg_id')} in {chat_id}: {e}")
             await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
     else:
         counter = await collection.count_documents(
@@ -483,8 +495,8 @@ async def handle_flood(message, user_id: int, chat_id: int):
                 ):
                     try:
                         await pgram.delete_messages(chat_id, doc["msg_id"])
-                    except:
-                        pass
+                    except Exception as e:
+                        LOGGER.warning(f"antiflood: failed to delete flood msg {doc.get('msg_id')} in {chat_id}: {e}")
             await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
 
 approve_collection = db["approve_d"]
@@ -502,10 +514,10 @@ async def handle_message(client, message):
     user_id = message.from_user.id if message.from_user else message.sender_chat.id
     msg_id = message.id
 
-    if not await check_flood_on(chat_id):
+    if not await _check_flood_on_cached(chat_id):
         return
     
-    if await approve_collection.find_one({"user_id": user_id, "chat_id": chat_id}):
+    if await _is_approved_cached(chat_id, user_id):
         return
 
     last_msg = await collection.find_one(

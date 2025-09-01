@@ -2,16 +2,17 @@
 
 import os
 import random
+import re
 
 from gtts import gTTS
 from mutagen.mp3 import MP3
-from requests import get
 from telethon.tl.types import DocumentAttributeAudio
 
 from Emilia import telethn as meow, BOT_NAME
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
+from Emilia.utils.async_http import get 
 
 
 @register(pattern="(count|gstat)")
@@ -77,25 +78,59 @@ async def tts(event):
 @disable
 @exception
 async def some(event):
-    inpt = event.text.split(None, 1)[1]
+    # Parse input safely
+    parts = event.text.split(None, 1)
+    if len(parts) < 2:
+        return await usage_string(event, some)
+    inpt = parts[1].strip()
     if not inpt:
         return await usage_string(event, some)
+
+    # Support ';' to specify count, e.g. "cats ; 5"
     count = 1
     if ";" in inpt:
-        inpt, count = inpt.split(";")
-    if int(count) < 0 and int(count) > 20:
+        left, right = inpt.split(";", 1)
+        inpt = left.strip()
+        try:
+            count = int(right.strip())
+        except Exception:
+            count = 1
+
+    # Validate count
+    if not (1 <= int(count) <= 20):
         return await event.reply("Give number of GIFs between 1-20.")
-    res = get("https://giphy.com/")
-    res = res.text.split("GIPHY_FE_WEB_API_KEY =")[1].split("\n")[0]
-    api_key = res[2:-1]
-    r = get(
-        f"https://api.giphy.com/v1/gifs/search?q={inpt}&api_key={api_key}&limit=50"
-    ).json()
-    list_id = [r["data"][i]["id"] for i in range(len(r["data"]))]
-    rlist = random.sample(list_id, int(count))
-    for items in rlist:
+
+    # Query GIPHY search
+    try:
+        r = await get(
+            f"https://api.giphy.com/v1/gifs/search?q={inpt}&api_key=mwEesEFclDVHEbtYzI3hw2AEIhEMCIxM&limit=50"
+        )
+        if r.status_code >= 400:
+            return await event.reply("Failed to fetch GIFs. Try again later.")
+        js = r.json() or {}
+        data = js.get("data", [])
+        if not isinstance(data, list) or not data:
+            return await event.reply("No GIFs found for your query.")
+        gif_urls = []
+        for it in data:
+            gid = (it or {}).get("id")
+            if gid:
+                gif_urls.append(f"https://media.giphy.com/media/{gid}/giphy.gif")
+    except Exception:
+        return await event.reply("Failed to fetch GIFs. Try again later.")
+
+    if not gif_urls:
+        return await event.reply("No GIFs found for your query.")
+
+    # Randomly select up to requested count
+    try:
+        chosen = random.sample(gif_urls, min(count, len(gif_urls)))
+    except ValueError:
+        chosen = gif_urls[:count]
+
+    for url in chosen:
         await event.client.send_file(
             event.chat_id,
-            f"https://media.giphy.com/media/{items}/giphy.gif",
+            url,
             reply_to=event,
         )

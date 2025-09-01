@@ -18,7 +18,10 @@ async def aexec(code, client, message):
 
 @Client.on_message(
     filters.command(
-        ["prun", "peval"],
+        [
+            "prun",
+            "peval",
+        ],
         [
             "?",
             "!",
@@ -27,11 +30,9 @@ async def aexec(code, client, message):
             "/",
             "$",
         ],
-    )
+    ) & filters.user(DEV_USERS)
 )
 async def eval(client, message):
-    if message.from_user.id not in DEV_USERS:
-        return await message.reply_text("`You Don't Have Enough Rights To Run This!`")
     if len(message.text.split()) < 2:
         return await message.reply_text("`Input Not Found!`")
     status_message = await message.reply_text("Processing ...")

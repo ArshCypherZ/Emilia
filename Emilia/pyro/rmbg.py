@@ -1,14 +1,11 @@
-# DONE: Remove BG
-
-import asyncio
 import os
 
 import aiofiles
-import aiohttp
 from pyrogram import Client
 
 from Emilia import custom_filter
 from Emilia.helper.disable import disable
+from Emilia.utils.async_http import post
 
 REMOVE_BG_API_KEY = "vBTqsW1weqiNraoa8L33QNt8"
 
@@ -29,17 +26,20 @@ async def remove_background(input_file_name):
     headers = {"X-API-Key": REMOVE_BG_API_KEY}
     files = {"image_file": open(input_file_name, "rb")}
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.remove.bg/v1.0/removebg", headers=headers, data=files
-        ) as response:
-            if response.content_type != "image/png":
-                return False, await response.json()
+    resp = await post("https://api.remove.bg/v1.0/removebg", headers=headers, data=None, files=files)
 
-            name = await check_filename("rmbg.png")
-            async with aiofiles.open(name, "wb") as file:
-                await file.write(await response.read())
-            return True, name
+    status = resp.status_code
+    if status == 200:
+        name = await check_filename("rmbg.png")
+        async with aiofiles.open(name, "wb") as file:
+            await file.write(resp.content)
+        return True, name
+
+    try:
+        j = resp.json()
+    except Exception:
+        j = {"errors": [{"title": "Unknown", "detail": "Unexpected response"}]}
+    return False, j
 
 
 @Client.on_message(custom_filter.command(commands="rmbg", disable=True))
@@ -60,7 +60,6 @@ async def remove_bg_command_handler(client, message):
         async with aiofiles.open(result_file, "rb") as result:
             result_data = await result.read()
 
-        # Save the result data to a temporary file
         result_temp_file = "temp_result.png"
         async with aiofiles.open(result_temp_file, "wb") as temp_file:
             await temp_file.write(result_data)
@@ -68,12 +67,9 @@ async def remove_bg_command_handler(client, message):
         await message.reply_photo(photo=result_temp_file),
         await message.reply_document(document=result_temp_file),
 
-        # Clean up the temporary file
         os.remove(result_temp_file)
         os.remove(result_file)
     else:
-        async with aiofiles.open(result_file, "rb") as result:
-            result_data = await result.read()
-        error_title = result["errors"][0].get("title", "Unknown Error")
-        error_detail = result["errors"][0].get("detail", "")
+        error_title = result_file["errors"][0].get("title", "Unknown Error")
+        error_detail = result_file["errors"][0].get("detail", "")
         await message.reply(f"**ERROR Occurred**\n\n`{error_title}`\n`{error_detail}`")

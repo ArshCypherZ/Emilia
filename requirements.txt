@@ -1,57 +1,46 @@
-langdetect
 urlextract
 captcha
 apscheduler
-httpx[http2]
 ffmpeg-python
 opencv-python
 vanitas-antispam
 aiofiles>=0.6.0
 aiohttp[speedups]>=3.7.3
 tracemoepy
-lottie
 
 dnspython
 natsort
-lxml
-html5lib
 
 # database
 motor
 
-git+https://github.com/KurimuzonAkuma/pyrogram.git@v2.1.16 # instead of pyrogram we use updated fork
+# telegram clients
+git+https://github.com/KurimuzonAkuma/pyrogram.git@v2.1.16
 telethon
-git-python
-emoji
-emojis
 
-# scrapper
-freeGPT
-bs4
-requests
-lyricsgenius
+emoji
+
+# scraping
+beautifulsoup4
 
 # image
-pillow==9.5.0
+pillow>=10.0.0
 webcolors
 
 # api
 nekos.py
 wikipedia
 py-carbon
-replicate
-mtranslate
 catbox-uploader
-gpytranslate
-fal-client
 google-genai
 
-# cpython
-cryptg
+# media metadata
 hachoir
-TgCrypto
-uvloop
 
 # tts
 gtts
 mutagen
+
+# performance
+cryptg
+TgCrypto

@@ -1,9 +1,7 @@
-# DONE: Wallpaper
-
 import asyncio
 import random
 
-from requests import get
+from Emilia.utils.async_http import get
 
 from Emilia import telethn
 from Emilia.custom_filter import register
@@ -29,11 +27,12 @@ async def some1(event):
 
     Emievent = await event.reply("Sending please wait...")
     try:
-        r = get(
+        r = await get(
             f"https://bakufuapi.vercel.app/api/wall/wallhaven?query={inpt}&page=1"
-        ).json()
+        )
+        r_json = r.json()
 
-        list_id = [r["response"][i]["path"] for i in range(len(r["response"]))]
+        list_id = [r_json["response"][i]["path"] for i in range(len(r_json["response"]))]
         item = (random.sample(list_id, 1))[0]
     except BaseException:
         await event.reply("Try again later or enter correct query.")

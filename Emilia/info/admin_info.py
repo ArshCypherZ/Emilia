@@ -11,7 +11,6 @@ These commands are solely made for admins of group chats!
 • /demote <reply/username/mention/userid>: Demote a user.
 
 • /admins: List the admins in the current chat.
-• /vcadmincache: Update the admin cache for music player, to take into account new admins/admin privileges.
 
 • /cleanblue `<on/off>`: Will delete messages containing bot commands.
 

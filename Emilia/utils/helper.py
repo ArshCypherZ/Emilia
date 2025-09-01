@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import shlex
+from collections import deque
+import tempfile
 from datetime import datetime
 from os.path import basename
 from time import time
@@ -9,7 +11,7 @@ from traceback import format_exc as err
 from typing import Optional, Tuple
 from uuid import uuid4
 
-import requests
+from Emilia.utils.async_http import post
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pyrogram import Client
 from pyrogram.enums import ChatType
@@ -21,7 +23,7 @@ from pyrogram.types import (
     Message,
 )
 
-from Emilia import DEV_USERS, DOWN_PATH, EVENT_LOGS, anibot
+from Emilia import DEV_USERS, DOWN_PATH, EVENT_LOGS, anibot, LOGGER
 from Emilia.utils.db import get_collection
 
 AUTH_USERS = get_collection("AUTH_USERS")
@@ -31,6 +33,19 @@ GROUPS = get_collection("GROUPS")
 CC = get_collection("CONNECTED_CHANNELS")
 USER_JSON = {}
 USER_WC = {}
+
+
+def _fw_delay_seconds(e: FloodWait) -> int:
+    secs = (
+        getattr(e, "value", None)
+        or getattr(e, "x", None)
+        or getattr(e, "seconds", None)
+        or 1
+    )
+    try:
+        return int(secs) + 5
+    except Exception:
+        return 5
 
 
 def rand_key():
@@ -49,7 +64,7 @@ def control_user(func):
                 gidtitle = msg["chat"]["username"]
             except KeyError:
                 gidtitle = msg["chat"]["title"]
-            await GROUPS.insert_one({"_id": gid, "grp": gidtitle})
+            await GROUPS.update_one({"_id": gid}, {"$set": {"grp": gidtitle}}, upsert=True)
             await clog(
                 "Emilia",
                 f"Bot added to a new group\n\n{gidtitle}\nID: `{gid}`",
@@ -73,7 +88,7 @@ def control_user(func):
                         )
                         await clog("Emilia", f"UserID: {user}", "SPAM")
                     if USER_WC[user] == 5:
-                        await IGNORE.insert_one({"_id": user})
+                        await IGNORE.update_one({"_id": user}, {"$set": {"_id": user}}, upsert=True)
                         await message.reply_text(
                             (
                                 "You have been exempted from using this bot "
@@ -93,7 +108,7 @@ def control_user(func):
         try:
             await func(_, message, msg)
         except FloodWait as e:
-            await asyncio.sleep(e.seconds + 5)
+            await asyncio.sleep(_fw_delay_seconds(e))
         except MessageNotModified:
             pass
         except Exception:
@@ -147,7 +162,7 @@ def check_user(func):
             try:
                 await func(_, c_q, cq)
             except FloodWait as e:
-                await asyncio.sleep(e.x + 5)
+                await asyncio.sleep(_fw_delay_seconds(e))
             except MessageNotModified:
                 pass
             except Exception:
@@ -171,7 +186,7 @@ def check_user(func):
                     try:
                         await func(_, c_q, cq)
                     except FloodWait as e:
-                        await asyncio.sleep(e.x + 5)
+                        await asyncio.sleep(_fw_delay_seconds(e))
                     except MessageNotModified:
                         pass
                     except Exception:
@@ -277,7 +292,7 @@ async def take_screen_shot(
     video_file: str, duration: int, path: str = ""
 ) -> Optional[str]:
     """take a screenshot"""
-    print(
+    LOGGER.info(
         "[[[Extracting a frame from %s ||| Video duration => %s]]]",
         video_file,
         duration,
@@ -288,7 +303,7 @@ async def take_screen_shot(
     )
     err = (await runcmd(command))[1]
     if err:
-        print(err)
+        LOGGER.error(err)
     return thumb_image_path if os.path.exists(thumb_image_path) else None
 
 
@@ -316,9 +331,10 @@ async def return_json_senpai(
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-    return requests.post(
+    response = await post(
         url, json={"query": query, "variables": vars_}, headers=headers
-    ).json()
+    )
+    return response.json()
 
 
 def cflag(country):
@@ -377,21 +393,39 @@ async def clog(
         data += "\n\n\n\n"
     await anibot.send_message(chat_id=EVENT_LOGS, text=log)
     if msg or cq:
-        with open("query_data.txt", "x") as output:
-            output.write(data)
-        await anibot.send_document(EVENT_LOGS, "query_data.txt")
-        os.remove("query_data.txt")
+        try:
+            with tempfile.NamedTemporaryFile("w", delete=False, prefix="query_data_", suffix=".txt") as output:
+                output.write(data)
+                tmp_path = output.name
+            await anibot.send_document(EVENT_LOGS, tmp_path)
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception as e:
+                LOGGER.warning(f"clog: failed to remove temp query file {tmp_path}: {e}")
     if replied:
-        media = replied.photo or replied.sticker or replied.animation or replied.video
-        media_path = await anibot.download_media(media)
-        await anibot.send_document(EVENT_LOGS, media_path)
+        try:
+            media = replied.photo or replied.sticker or replied.animation or replied.video
+            media_path = await anibot.download_media(media)
+            await anibot.send_document(EVENT_LOGS, media_path)
+        finally:
+            try:
+                os.remove(media_path)
+            except Exception as e:
+                LOGGER.warning(f"clog: failed to remove temp media file {media_path}: {e}")
     if file:
         await anibot.send_document(EVENT_LOGS, file)
-    if send_as_file:
-        with open("dataInQuestio.txt", "x") as text_file:
-            text_file.write()
-        await anibot.send_document(EVENT_LOGS, "dataInQuestio.txt")
-        os.remove("dataInQuestio.txt")
+    if send_as_file is not None:
+        try:
+            with tempfile.NamedTemporaryFile("w", delete=False, prefix="dataInQuestion_", suffix=".txt") as text_file:
+                text_file.write(send_as_file)
+                tf_path = text_file.name
+            await anibot.send_document(EVENT_LOGS, tf_path)
+        finally:
+            try:
+                os.remove(tf_path)
+            except Exception as e:
+                LOGGER.warning(f"clog: failed to remove temp text file {tf_path}: {e}")
 
 
 def get_btns(
@@ -634,27 +668,40 @@ def season_(future: bool = False):
         return "FALL", y
 
 
-PIC_LS = []
+PIC_LS = deque(maxlen=1000)
 
 
 async def remove_useless_elements():
-    for i in PIC_LS:
-        if (await PIC_DB.find_one({"_id": i[0]})) is not None:
-            PIC_LS.remove(i)
-        else:
+    for i in list(PIC_LS):
+        try:
+            if (await PIC_DB.find_one({"_id": i})) is not None:
+                try:
+                    PIC_LS.remove(i)
+                except ValueError:
+                    pass
+        except Exception:
             continue
 
 
 async def remove_down_path_files():
-    for file_name in os.listdir(DOWN_PATH):
-        file_path = os.path.join(DOWN_PATH, file_name)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-        else:
-            continue
+    # Ensure directory exists; if missing, create it and return silently
+    try:
+        if not os.path.isdir(DOWN_PATH):
+            os.makedirs(DOWN_PATH, exist_ok=True)
+            return
+        for file_name in os.listdir(DOWN_PATH):
+            file_path = os.path.join(DOWN_PATH, file_name)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            else:
+                continue
+    except Exception as e:
+        # Log and continue; do not crash scheduler
+        from Emilia import LOGGER
+        LOGGER.warning(f"remove_down_path_files: failed to clean downloads dir {DOWN_PATH}: {e}")
+        return
 
 
 j1 = AsyncIOScheduler()
 j1.add_job(remove_useless_elements, "interval", minutes=3)
 j1.add_job(remove_down_path_files, "interval", minutes=5)
-j1.start()

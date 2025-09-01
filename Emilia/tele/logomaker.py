@@ -6,7 +6,7 @@ import os
 import random
 
 from PIL import Image, ImageDraw, ImageFont
-from requests import get
+from Emilia.utils.async_http import get
 
 from Emilia import telethn
 from Emilia.custom_filter import register
@@ -253,7 +253,11 @@ LOGO_LINKS = [
 @disable
 @exception
 async def lego(event):
-    text = event.text.split(None, 1)[1]
+    # Safer arg parsing
+    try:
+        text = event.text.split(None, 1)[1].strip()
+    except Exception:
+        text = None
 
     if not text:
         return await usage_string(event, lego)
@@ -261,15 +265,20 @@ async def lego(event):
     pesan = await event.reply("Logo In A Process. Please Wait.")
 
     randc = random.choice(LOGO_LINKS)
-    img = Image.open(io.BytesIO(get(randc).content))
+    response = await get(randc)
+    img = Image.open(io.BytesIO(response.content))
     draw = ImageDraw.Draw(img)
     image_widthz, image_heightz = img.size
     fnt = glob.glob("Emilia/utils/Logo/*")
 
     randf = random.choice(fnt)
     font = ImageFont.truetype(randf, 120)
-    w, h = draw.textsize(text, font=font)
-    h += int(h * 0.21)
+
+    # Use textbbox for Pillow 10+ compatibility
+    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=1)
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+
     draw.text(
         ((image_widthz - w) / 2, (image_heightz - h) / 2),
         text,

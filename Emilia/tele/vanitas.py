@@ -1,5 +1,3 @@
-# DONE: Vanitas Antispam System
-
 import re
 
 from telethon import events
@@ -58,7 +56,11 @@ async def vanitas_handerl(van):
     elif re.findall(OFF, args):
         if vanitas:
             return await van.reply("Vanitas Antispam System is already disabled.")
-        await vanitas_db.insert_one({"chat_id": chat})
+        await vanitas_db.update_one(
+            {"chat_id": chat},
+            {"$setOnInsert": {"chat_id": chat}},
+            upsert=True,
+        )
         await van.reply(
             f"Disabled Vanitas Antispam System in **{van.chat.title}** by [{van.sender.first_name}]({van.sender_id})."
         )

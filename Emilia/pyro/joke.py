@@ -1,5 +1,5 @@
 from pyrogram import Client
-from requests import get
+from Emilia.utils.async_http import get
 
 from Emilia import custom_filter
 from Emilia.helper.disable import disable
@@ -13,7 +13,8 @@ from Emilia.utils.decorators import *
 @disable
 async def joke(client, message):
     try:
-        joke = get("https://v2.jokeapi.dev/joke/Any").json()
+        response = await get("https://v2.jokeapi.dev/joke/Any")
+        joke = response.json()
         try:
             get1 = joke["setup"]
             get2 = joke["delivery"]

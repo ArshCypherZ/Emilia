@@ -46,17 +46,9 @@ users_collection = db.chatlevels
 
 
 async def increase_points(user_id, chat_id, points):
-    user_data = await users_collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}
-    )
-    if user_data:
-        await users_collection.update_one(
-            {"_id": user_data["_id"]}, {"$inc": {"points": points}}
-        )
-    else:
-        await users_collection.insert_one(
-            {"user_id": user_id, "chat_id": chat_id, "points": points}
-        )
+    # Use targeted filter and upsert to avoid read-before-write; ensured index on (chat_id, user_id)
+    flt = {"user_id": int(user_id), "chat_id": int(chat_id)}
+    return await users_collection.update_one(flt, {"$inc": {"points": points}}, upsert=True)
 
 
 @Client.on_message(
@@ -82,9 +74,7 @@ async def upvote(_, message):
         user_id = message.reply_to_message.from_user.id
         user_mention = message.reply_to_message.from_user.mention
         await increase_points(user_id, chat_id, 1)
-        fuser = await users_collection.find_one(
-            {"user_id": user_id, "chat_id": chat_id}
-        )
+        fuser = await users_collection.find_one({"user_id": int(user_id), "chat_id": int(chat_id)}, {"points": 1})
         await message.reply_text(
             f"Incremented Karma of {user_mention} By 1 \nTotal Points: {fuser['points']}"
         )
@@ -113,9 +103,7 @@ async def downvote(_, message):
         user_id = message.reply_to_message.from_user.id
         user_mention = message.reply_to_message.from_user.mention
         await increase_points(user_id, chat_id, -1)
-        fuser = await users_collection.find_one(
-            {"user_id": user_id, "chat_id": chat_id}
-        )
+        fuser = await users_collection.find_one({"user_id": int(user_id), "chat_id": int(chat_id)}, {"points": 1})
         await message.reply_text(
             f"Decremented Karma of {user_mention} By 1 \nTotal Points: {fuser['points']}"
         )

@@ -1,11 +1,9 @@
-# DONE: Couples
-
 import random
 from datetime import datetime, timedelta
 
 from pyrogram import Client, enums
 
-from Emilia import custom_filter, db, pgram
+from Emilia import custom_filter, db, pgram, LOGGER
 from Emilia.helper.disable import disable
 
 collection = db.coup
@@ -65,7 +63,6 @@ async def get_couples(chat_id):
 async def choose_couples_command(client, message):
     chat_id = message.chat.id
 
-    # Check if the command is executed in a group chat
     if message.chat.type == enums.ChatType.PRIVATE:
         await message.reply_text("Sorry! This magic works only in group chats! 🎩✨")
         return
@@ -97,5 +94,5 @@ async def get_user_or_not_found(user_id):
         user = await pgram.get_users(user_id)
         return user
     except Exception as e:
-        print(f"Error retrieving user: {e}")
+        LOGGER.error(f"Error retrieving user: {e}")
         return None

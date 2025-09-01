@@ -1,16 +1,21 @@
 import asyncio
 import importlib
 import traceback
-import os
 from os.path import dirname
 from sys import platform
+import os
 
-import uvloop
 from pyrogram import idle
+from Emilia import LOGGER, anibot, create_indexes, pgram, IS_CLONE, telethn
 
-from Emilia import LOGGER, anibot, create_indexes, pgram, telethn, ORIGINAL_EVENT_LOOP, db, start_session
+from Emilia.data import HELPABLE, IMPORTED, SUB_MODE, HIDDEN_MOD, USER_INFO
 from Emilia.info import ALL_MODULES
-from Emilia.tele.clone import clone_start_up
+from Emilia.pyro.nightmode import scheduler
+from Emilia.utils.helper import j1 as helper_scheduler
+from Emilia.tele.clone import clone_start_up, shutdown_all_clones
+from Emilia.tele.backup import send as send_backup
+from Emilia.helper.http import close_http_clients
+
 
 HELP_MSG = "Click the button below to get help menu in your pm ~"
 START_MSG = "**Hie Senpai ~ UwU** I am well and alive ;)"
@@ -18,74 +23,179 @@ START_MSG = "**Hie Senpai ~ UwU** I am well and alive ;)"
 HELP_IMG = "https://images-cdn.9gag.com/photo/aXvvrdz_700b.jpg"
 START_IMG = "https://image.myanimelist.net/ui/5LYzTBVoS196gvYvw3zjwNzKv3dEGU_pTR8jQb-vfgTLHxH8jxREmQF_Ct58ke7N"
 
-IMPORTED = {}
-HELPABLE = {}
-SUB_MODE = {}
-HIDDEN_MOD = {}
+def import_modules():
+    cdir = dirname(__file__)
+    path_dirSec = "/" if platform in ["linux", "linux2"] else "\\"
 
-USER_INFO = []
+    LOGGER.info("Importing modules... length: {}".format(len(ALL_MODULES)))
+    
+    for mode in ALL_MODULES:
+        module = mode.replace(cdir, "").replace(path_dirSec, ".")
+        try:
+            if module not in IMPORTED:
+                LOGGER.info(f"Importing module: {module}")
+                imported_module = importlib.import_module("Emilia" + module)
 
-cdir = dirname(__file__)
-if platform == "linux" or platform == "linux2":
-    path_dirSec = "/"
-elif platform == "win32":
-    path_dirSec = "\\"
+                if not hasattr(imported_module, "__mod_name__"):
+                    imported_module.__mod_name__ = imported_module.__name__
 
+                if imported_module.__mod_name__.lower() not in IMPORTED:
+                    IMPORTED[imported_module.__mod_name__.lower()] = imported_module
+                else:
+                    raise Exception("Can't have two modules with the same name!")
 
-for mode in ALL_MODULES:
-    module = mode.replace(cdir, "").replace(path_dirSec, ".")
-    if module not in IMPORTED:
-        imported_module = importlib.import_module("Emilia" + module)
+                if hasattr(imported_module, "__help__") and imported_module.__help__:
+                    HELPABLE[imported_module.__mod_name__.lower()] = imported_module
+                    LOGGER.info(f"Module {imported_module.__mod_name__} added to HELPABLE.")
+                if hasattr(imported_module, "__sub_mod__") and imported_module.__sub_mod__:
+                    SUB_MODE[imported_module.__mod_name__.lower()] = imported_module
+                    LOGGER.info(f"Module {imported_module.__mod_name__} added to SUB_MODE.")
+                if hasattr(imported_module, "__hidden__") and imported_module.__hidden__:
+                    HIDDEN_MOD[imported_module.__mod_name__.lower()] = imported_module
+                    LOGGER.info(f"Module {imported_module.__mod_name__} added to HIDDEN_MOD.")
+                if hasattr(imported_module, "__user_info__") and imported_module.__user_info__:
+                    USER_INFO.append(imported_module.__user_info__)
+                    LOGGER.info(f"User info from {imported_module.__mod_name__} added to USER_INFO.")
+                
+                LOGGER.info(f"Module {imported_module.__mod_name__} imported successfully.")
+            
 
-    if not hasattr(imported_module, "__mod_name__"):
-        imported_module.__mod_name__ = imported_module.__name__
-
-    if not imported_module.__mod_name__.lower() in IMPORTED:
-        IMPORTED[imported_module.__mod_name__.lower()] = imported_module
-    else:
-        raise Exception("Can't have two modules with the same name! Please change one")
-
-    if hasattr(imported_module, "__help__") and imported_module.__help__:
-        HELPABLE[imported_module.__mod_name__.lower()] = imported_module
-
-    if hasattr(imported_module, "__sub_mod__") and imported_module.__sub_mod__:
-        SUB_MODE[imported_module.__mod_name__.lower()] = imported_module
-
-    if hasattr(imported_module, "__hidden__") and imported_module.__hidden__:
-        HIDDEN_MOD[imported_module.__mod_name__.lower()] = imported_module.__hidden__
-
-    if hasattr(imported_module, "__user_info__"):
-        USER_INFO.append(imported_module)
-
+        except Exception as e:
+            LOGGER.error(f"Failed to import {module}: {e}")
+            traceback.print_exc()
+        
+    LOGGER.info("All modules imported successfully.")
 
 async def start_anibot():
-    await anibot.start()
+    try:
+        await anibot.start()
+        LOGGER.info("Anibot client started successfully.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start anibot client: {e}")
 
 async def start_pgram():
-    uvloop.install() # Comment it if using Windows
-    await pgram.start()
-    await idle()
+    try:
+        await pgram.start()
+        LOGGER.info("Pgram client started successfully.")
+        await idle()
+        LOGGER.info("Pgram client stopped.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start pgram client: {e}")
 
-async def gae():
-    tasks = [start_anibot(), start_pgram()]
+async def stop_telethon():
+    try:
+        if telethn and telethn.is_connected():
+            LOGGER.info("Stopping Telethon client...")
+            await telethn.disconnect()
+            await asyncio.sleep(0.1)
+            LOGGER.info("Telethon client stopped.")
+    except Exception as e:
+        LOGGER.error(f"Error during Telethon shutdown: {e}")
+
+
+def stop_telethon_sync():
+    try:
+        if not telethn:
+            return
+        connected = False
+        try:
+            connected = telethn.is_connected()
+        except Exception:
+            connected = True
+        if not connected:
+            return
+        LOGGER.info("Stopping Telethon client...")
+        loop = getattr(telethn, "_loop", None) or asyncio.get_event_loop()
+        fut = asyncio.run_coroutine_threadsafe(telethn.disconnect(), loop)
+        try:
+            fut.result(timeout=5)
+        except Exception as e:
+            LOGGER.error(f"Error during Telethon shutdown: {e}")
+        else:
+            LOGGER.info("Telethon client stopped.")
+    except Exception as e:
+        LOGGER.error(f"Error stopping Telethon client: {e}")
+
+
+async def main():
+
     await create_indexes()
-    await start_session()
-    await asyncio.gather(*tasks)
+
+    import_modules()
+    LOGGER.info("All modules loaded.")
+
+    scheduler.start()
+    helper_scheduler.start()
+    LOGGER.info("Schedulers started successfully.")
+
+    from Emilia.utils.cache import start_cache_cleanup
+
+    async def _delayed_backup():
+        try:
+            await asyncio.sleep(10)
+            await send_backup()
+            LOGGER.info("Startup backup completed.")
+        except asyncio.CancelledError:
+            LOGGER.info("Startup backup task cancelled during shutdown.")
+        except Exception:
+            LOGGER.error("Startup backup failed")
+    
+    asyncio.create_task(start_cache_cleanup())
+
+    try:
+        from Emilia.functions.admins import start_admin_cache_task
+        asyncio.create_task(start_admin_cache_task())
+        LOGGER.info("Started admin cache update task.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start admin cache task: {e}")
+
+    try:
+        from Emilia.tele.levels import start_levels_flush_task, flush_levels_buffers_now
+        asyncio.create_task(start_levels_flush_task(5.0))
+        LOGGER.info("Started periodic levels buffer flusher.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start levels flusher: {e}")
+
+    if not IS_CLONE:
+        asyncio.create_task(_delayed_backup())
+        asyncio.create_task(clone_start_up())
+    
+    LOGGER.info("Background tasks have been started.")
+    LOGGER.info("Bot is now online and ready!")
+    LOGGER.info("Starting Pyrogram clients...")
+    await asyncio.gather(start_pgram(), start_anibot())
+    LOGGER.info("Pyrogram clients exited.")
+
+    try:
+        from Emilia.tele.levels import flush_levels_buffers_now as _flush_levels
+        await _flush_levels()
+    except Exception as e:
+        LOGGER.error(f"Error flushing levels buffers on shutdown: {e}")
 
 
 if __name__ == "__main__":
     try:
-        if ORIGINAL_EVENT_LOOP: # Main Bot
-            os.chdir("/app") # Change to your directory where the bot is located on the server
-            asyncio.get_event_loop().run_until_complete(asyncio.gather(clone_start_up(), gae()))
-        else:
-            asyncio.get_event_loop().run_until_complete(gae()) # Clone Bot
-        telethn.run_until_disconnected()
+        asyncio.get_event_loop().run_until_complete(main())
+
     except KeyboardInterrupt:
-        pass
+        LOGGER.error("Bot stopped via KeyboardInterrupt.")
     except Exception:
         err = traceback.format_exc()
         LOGGER.error(err)
     finally:
-        asyncio.get_event_loop().stop()
-        LOGGER.error("Stopped Services.")
+        if not IS_CLONE:
+            try:
+                asyncio.run(shutdown_all_clones())
+            except Exception as e:
+                LOGGER.error(f"Error shutting down clone clients: {e}")
+        try:
+            from Emilia.tele.chatbot import shutdown_chatbot
+            asyncio.run(shutdown_chatbot())
+        except Exception as e:
+            LOGGER.error(f"Error shutting down chatbot: {e}")
+        stop_telethon_sync()
+        try:
+            asyncio.run(close_http_clients())
+        except Exception as e:
+            LOGGER.error(f"Error closing helper HTTP clients: {e}")
+        LOGGER.info("Stopped Services.")

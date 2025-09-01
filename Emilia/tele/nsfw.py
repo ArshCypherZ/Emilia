@@ -1,6 +1,6 @@
 # DONE: NSFW
 
-from requests import get
+from Emilia.utils.async_http import get
 
 import Emilia.strings as strings
 from Emilia import telethn as meow
@@ -49,8 +49,9 @@ async def blowjob(event):
         if not is_nsfw:
             return await event.reply("NSFW is not activated")
     url = f"{url_nsfw}blowjob"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     if event.reply_to_msg_id:
         await meow.send_file(event.chat_id, img, reply_to=event.reply_to_msg_id)
     await meow.send_file(event.chat_id, img)
@@ -63,8 +64,9 @@ async def trap(event):
         if not is_nsfw:
             return await event.reply("NSFW is not activated")
     url = f"{url_nsfw}trap"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     if event.reply_to_msg_id:
         await meow.send_file(event.chat_id, img, reply_to=event.reply_to_msg_id)
     await meow.send_file(event.chat_id, img)
@@ -77,8 +79,9 @@ async def nsfwwaifu(event):
         if not is_nsfw:
             return await event.reply("NSFW is not activated")
     url = f"{url_nsfw}waifu"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     if event.reply_to_msg_id:
         await meow.send_file(event.chat_id, img, reply_to=event.reply_to_msg_id)
     await meow.send_file(event.chat_id, img)
@@ -91,20 +94,22 @@ async def nsfwneko(event):
         if not is_nsfw:
             return await event.reply("NSFW is not activated")
     url = f"{url_nsfw}neko"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     if event.reply_to_msg_id:
         await meow.send_file(event.chat_id, img, reply_to=event.reply_to_msg_id)
     await meow.send_file(event.chat_id, img)
 
 
 @register(pattern="lewd")
-async def lewd(event):
+async def lewd(event):    
     if event.is_group:
         is_nsfw = await is_nsfw_on(event.chat_id)
         if not is_nsfw:
             return await event.reply("NSFW is not activated")
-    r = get("https://waifu-api.vercel.app/items/1").json()
+    r = await get("https://waifu-api.vercel.app/items/1")
+    r_json = r.json()
     if event.reply_to_msg_id:
-        await meow.send_file(event.chat_id, r, reply_to=event.reply_to_msg_id)
-    await meow.send_file(event.chat_id, r)
+        await meow.send_file(event.chat_id, r_json, reply_to=event.reply_to_msg_id)
+    await meow.send_file(event.chat_id, r_json)

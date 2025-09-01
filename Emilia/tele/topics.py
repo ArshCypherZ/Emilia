@@ -9,6 +9,43 @@ from Emilia.functions.admins import can_manage_topics
 from Emilia.utils.decorators import *
 
 
+async def _get_args_text(event):
+    """Return the text after the command, or None."""
+    try:
+        return event.text.split(None, 1)[1].strip()
+    except Exception:
+        return None
+
+
+async def _detect_topic_id(event):
+    try:
+        msg = getattr(event, "message", None) or event
+        r = getattr(msg, "reply_to", None)
+        if r:
+            top_id = getattr(r, "reply_to_top_id", None) or getattr(
+                r, "reply_to_msg_id", None
+            )
+            if top_id:
+                return int(top_id)
+    except Exception:
+        pass
+
+    try:
+        if getattr(event, "reply_to_msg_id", None):
+            rep = await event.get_reply_message()
+            rr = getattr(rep, "reply_to", None)
+            if rr:
+                top_id = getattr(rr, "reply_to_top_id", None) or getattr(
+                    rr, "reply_to_msg_id", None
+                )
+                if top_id:
+                    return int(top_id)
+    except Exception:
+        pass
+
+    return None
+
+
 @usage("/newtopic [name]")
 @example("/newtopic Games")
 @description(
@@ -25,22 +62,21 @@ async def create_topic(event):
     if not await can_manage_topics(event, event.sender_id):
         return
 
-    args = event.text.split(None, 1)[1]
+    name = await _get_args_text(event)
+    if not name:
+        return await usage_string(event, create_topic)
 
     if event.chat.forum:
-        if not args:
-            return await usage_string(event, create_topic)
-
         topic = await meow(
             functions.channels.CreateForumTopicRequest(
-                channel=event.chat_id, title=args
+                channel=event.chat_id, title=name
             )
         )
         result = topic.updates[1].message
-        await event.reply(f"Successfully created {args}\nID: {result.id}")
+        await event.reply(f"Successfully created {name}\nID: {result.id}")
         await meow.send_message(
             event.chat_id,
-            f"Congratulations {args} created successfully\nID: {result.id}",
+            f"Congratulations {name} created successfully\nID: {result.id}",
             reply_to=result.id,
         )
         return "NEW_TOPIC", None, None
@@ -65,10 +101,16 @@ async def delete_topic(event):
         return
 
     if event.chat.forum:
-        try:
-            topic_id = event.text.split(None, 1)[1]
-            topic_id = int(topic_id)
-        except (ValueError, TypeError):
+        text_arg = await _get_args_text(event)
+        topic_id = None
+        if text_arg:
+            try:
+                topic_id = int(text_arg)
+            except (ValueError, TypeError):
+                topic_id = None
+        if topic_id is None:
+            topic_id = await _detect_topic_id(event)
+        if topic_id is None:
             return await usage_string(event, delete_topic)
 
         await meow(
@@ -100,10 +142,16 @@ async def close_topic(event):
         return
 
     if event.chat.forum:
-        try:
-            topic_id = event.text.split(None, 1)[1]
-            topic_id = int(topic_id)
-        except (ValueError, TypeError):
+        text_arg = await _get_args_text(event)
+        topic_id = None
+        if text_arg:
+            try:
+                topic_id = int(text_arg)
+            except (ValueError, TypeError):
+                topic_id = None
+        if topic_id is None:
+            topic_id = await _detect_topic_id(event)
+        if topic_id is None:
             return await usage_string(event, close_topic)
 
         await meow(
@@ -135,10 +183,16 @@ async def open_topic(event):
         return
 
     if event.chat.forum:
-        try:
-            topic_id = event.text.split(None, 1)[1]
-            topic_id = int(topic_id)
-        except (ValueError, TypeError):
+        text_arg = await _get_args_text(event)
+        topic_id = None
+        if text_arg:
+            try:
+                topic_id = int(text_arg)
+            except (ValueError, TypeError):
+                topic_id = None
+        if topic_id is None:
+            topic_id = await _detect_topic_id(event)
+        if topic_id is None:
             return await usage_string(event, open_topic)
 
         await meow(
@@ -153,6 +207,11 @@ async def open_topic(event):
         )
 
 
+@usage("/renametopic [new name]\nTip: Run inside the topic to auto-detect it")
+@example("/renametopic Chit-chat")
+@description(
+    "Rename the current topic (when used in a topic) or the topic id you reply to."
+)
 @register(pattern="renametopic")
 @exception
 @anonadmin_checker
@@ -164,26 +223,36 @@ async def rename_topic(event):
     if not await can_manage_topics(event, event.sender_id):
         return
 
-    args = event.text.split(None, 1)[1]
-
-    if not args:
+    new_name = await _get_args_text(event)
+    if not new_name:
         return await event.reply("Please provide a new name for the topic.")
 
     if event.chat.forum:
-        try:
-            topic_id = event.reply_to.reply_to_msg_id
-        except (ValueError, TypeError):
+        topic_id = await _detect_topic_id(event)
+        if topic_id is None:
+            try:
+                if "|" in new_name:
+                    parts = [p.strip() for p in new_name.split("|", 1)]
+                    if len(parts) == 2:
+                        new_name, maybe_id = parts
+                        topic_id = int(maybe_id)
+            except Exception:
+                topic_id = None
+        if topic_id is None:
             return await event.reply(
-                "Please execute this command inside the topic which you want to rename."
+                "Please run this inside the topic you want to rename, or provide an ID."
             )
 
         result = await meow(
             functions.channels.EditForumTopicRequest(
-                channel=event.chat_id, topic_id=topic_id, title=args
+                channel=event.chat_id, topic_id=topic_id, title=new_name
             )
         )
         if result:
-            topic_name = result.updates[1].message.action.title
+            try:
+                topic_name = result.updates[1].message.action.title
+            except Exception:
+                topic_name = new_name
             await event.reply(f"Successfully renamed the topic to {topic_name}!")
             return "RENAMED_TOPIC", None, None
     else:

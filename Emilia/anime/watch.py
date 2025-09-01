@@ -30,7 +30,7 @@ async def get_watch_order(client: Client, message: Message, mdata: dict):
         user = mdata["from_user"]["id"]
     except KeyError:
         user = mdata["sender_chat"]["id"]
-    data = get_wols(x[1])
+    data = await get_wols(x[1])
     msg = f"Found related animes for the query {x[1]}"
     buttons = []
     if data == []:
@@ -51,7 +51,7 @@ async def get_watch_order(client: Client, message: Message, mdata: dict):
 @check_user
 async def watch_(client: anibot, cq: CallbackQuery, cdata: dict):
     kek, id_, qry, req, user = cdata["data"].split("_")
-    msg, total = get_wo(int(id_), int(req))
+    msg, total = await get_wo(int(id_), int(req))
     totalpg, lol = divmod(total, 50)
     button = []
     if lol != 0:
@@ -95,7 +95,7 @@ async def watch_(client: anibot, cq: CallbackQuery, cdata: dict):
 @Client.on_callback_query(filters.regex(pattern=r"wol_(.*)"))
 async def wls(client: anibot, cq: CallbackQuery):
     kek, qry, user = cq.data.split("_")
-    data = get_wols(qry)
+    data = await get_wols(qry)
     msg = f"Found related animes for the query {qry}"
     buttons = []
     for i in data:

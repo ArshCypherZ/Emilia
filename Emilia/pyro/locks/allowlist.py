@@ -13,8 +13,9 @@ from Emilia.pyro.connection.connection import connection
 
 @Client.on_message(custom_filter.command(commands="allowlist"))
 async def allowlist(client, message):
-    if await connection(message) is not None:
-        chat_id = await connection(message)
+    conn_chat_id = await connection(message)
+    if conn_chat_id is not None:
+        chat_id = conn_chat_id
         chat_title = await GetChat(chat_id)
     else:
         chat_id = message.chat.id

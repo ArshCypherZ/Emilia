@@ -1,7 +1,4 @@
-# DONE: ud, define
-
-import httpx
-from requests import get
+from Emilia.utils.async_http import get
 from telethon import Button, errors
 
 from Emilia.custom_filter import register
@@ -9,15 +6,12 @@ from Emilia.helper.disable import disable
 
 
 async def get_ud_definition(text):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.urbandictionary.com/v0/define", params={"term": text}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if "list" in data and data["list"]:
-                return data["list"][0]
-
+    url = "https://api.urbandictionary.com/v0/define"
+    response = await get(url, params={"term": text})
+    if response.status_code == 200:
+        data = response.json()
+        if "list" in data and data["list"]:
+            return data["list"][0]
     return None
 
 
@@ -63,7 +57,7 @@ async def define_command(event):
         return await event.reply("Please provide a word to define!")
 
     url = "https://api.dictionaryapi.dev/api/v2/entries/en/{}".format(user_input)
-    response = get(url)
+    response = await get(url)
 
     try:
         data = response.json()[0]

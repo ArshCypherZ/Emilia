@@ -1,8 +1,8 @@
-import aiohttp
 from pyrogram import Client
-from Emilia import custom_filter
+from Emilia import custom_filter, LOGGER
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
+from Emilia.utils.async_http import get
 
 @usage("/pokedex [pokemon name]")
 @example("/pokedex pikachu")
@@ -19,22 +19,21 @@ async def PokeDex(_, message):
     pokemon = message.text.split(None, 1)[1]
     pokedex_url = f"https://pokeapi.co/api/v2/pokemon/{pokemon}"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(pokedex_url) as request:
-            if request.status == 404:
-                return await message.reply_text("Wrong Pokemon Name.")
-            result = await request.json()
+    r = await get(pokedex_url)
+    if r.status_code == 404:
+        return await message.reply_text("Wrong Pokemon Name.")
+    result = r.json()
 
-            try:
-                pokemon_name = result["name"]
-                pokedex_id = result["id"]
-                types = ", ".join(typo["type"]["name"] for typo in result["types"][:5])
-                abilities = ", ".join(ability["ability"]["name"] for ability in result["abilities"][:5])
-                height = result["height"]
-                weight = result["weight"]
-                stats = "\n".join(f"{stat['stat']['name']}: {stat['base_stat']}" for stat in result["stats"])
+    try:
+        pokemon_name = result["name"]
+        pokedex_id = result["id"]
+        types = ", ".join(typo["type"]["name"] for typo in result["types"][:5])
+        abilities = ", ".join(ability["ability"]["name"] for ability in result["abilities"][:5])
+        height = result["height"]
+        weight = result["weight"]
+        stats = "\n".join(f"{stat['stat']['name']}: {stat['base_stat']}" for stat in result["stats"])
 
-                caption = f"""**Pokemon:** `{pokemon_name}`
+        caption = f"""**Pokemon:** `{pokemon_name}`
 **Pokedex:** `{pokedex_id}`
 **Type:** `{types}`
 **Abilities:** `{abilities}`
@@ -43,8 +42,9 @@ async def PokeDex(_, message):
 **Stats:**
 {stats}
 """
-            except Exception as e:
-                print(str(e))
+    except Exception as e:
+        LOGGER.error(str(e))
+        return
 
     poke_img = f"https://img.pokemondb.net/artwork/large/{pokemon_name}.jpg" if "pokemon_name" in locals() else None
 

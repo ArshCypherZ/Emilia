@@ -1,24 +1,23 @@
 from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
+from Emilia import LOGGER
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
 from Emilia.catbox import upload
-
-import requests
+from Emilia.utils.async_http import get
 
 SAUCENAO_API_KEY = '605d2f8a78158eab2602bf53e616f9885e41605d'
 SAUCENAO_API_URL = 'https://saucenao.com/search.php'
 
-def search_image(image_url):
+async def search_image(image_url):
     """Search for an image on SauceNAO."""
     params = {
         'api_key': "605d2f8a78158eab2602bf53e616f9885e41605d",
         'url': image_url,
         'output_type': 2,  # JSON output
     }
-    response = requests.get(SAUCENAO_API_URL, params=params)
-    print(response)
+    response = await get(SAUCENAO_API_URL, params=params)
     response.raise_for_status()
     return response.json()
 
@@ -26,7 +25,6 @@ def get_top_result(results):
     """Get the top result from SauceNAO search results."""
     if not results:
         return None
-    print(results)
     top_result = results[0]
     
     return {
@@ -56,7 +54,7 @@ async def saucenao_search(event):
     url2 = await upload(reply)
     wait = await event.reply("Searching for the image on SauceNAO...")
     
-    results = search_image(url2)
+    results = await search_image(url2)
     top_result = get_top_result(results['results'])
     if top_result:
         await event.reply(f"Top result:\n{top_result['url']}")

@@ -30,7 +30,7 @@ async def warns(client, message):
     user_id = user_info.id
 
     user_warn_num = await count_user_warn(chat_id, user_id)
-    if user_warn_num is None:
+    if user_warn_num is None or user_warn_num == 0:
         return await message.reply(f"User {user_info.mention} has no warnings!")
 
     chat_warn_limit = await warn_limit(chat_id)

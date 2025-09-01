@@ -8,14 +8,12 @@ import json
 import os
 from bson import ObjectId
 
-# Custom JSON encoder to handle ObjectId
 class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ObjectId):
             return str(obj)
         return super(JSONEncoder, self).default(obj)
 
-# Define collections for different settings
 collections = {
     'blocklists': db['blocklists'],
     'disable': db['disable'],
@@ -40,13 +38,11 @@ async def export_settings(event):
 
     args = event.raw_text.split()[1:]
 
-    # If no arguments, export all settings
     exported_data = {}
     if not args:
         for key, collection in collections.items():
             settings = await collection.find_one({'chat_id': chat_id})
             if settings:
-                # Remove '_id' and 'chat_id' before exporting
                 settings.pop('_id', None)
                 settings.pop('chat_id', None)
                 exported_data[key] = settings
@@ -56,7 +52,6 @@ async def export_settings(event):
             if collection:
                 settings = await collection.find_one({'chat_id': chat_id})
                 if settings:
-                    # Remove '_id' and 'chat_id' before exporting
                     settings.pop('_id', None)
                     settings.pop('chat_id', None)
                     exported_data[arg] = settings
@@ -65,7 +60,6 @@ async def export_settings(event):
         await event.reply("No settings found.")
         return
 
-    # Use the custom JSON encoder to handle ObjectId
     settings_json = json.dumps(exported_data, indent=4, cls=JSONEncoder)
     file_name = f"chat_settings_{chat_id}.json"
     
@@ -104,24 +98,15 @@ async def import_settings(event):
     for key, value in settings.items():
         collection = collections.get(key)
         if collection is not None:
-            # Remove existing '_id' if present and set the new 'chat_id'
             value.pop('_id', None)
             value['chat_id'] = chat_id
-            
-            # Check if the collection item already exists and update it or insert as needed
-            existing_item = await collection.find_one({'chat_id': chat_id})
-            if existing_item:
-                # Update only the provided settings while preserving other fields
-                await collection.update_one({'chat_id': chat_id}, {'$set': value})
-            else:
-                # Insert the new settings
-                await collection.insert_one(value)
+            await collection.update_one({'chat_id': chat_id}, {'$set': value}, upsert=True)
 
     await event.reply("Settings imported successfully.")
     os.remove(file_path)
 
 
-@register(pattern="reset")
+@register(pattern="chatreset")
 @rate_limit(3, 1800)
 async def reset_settings(event):
     chat_id = await connection(event) if await connection(event) else event.chat_id

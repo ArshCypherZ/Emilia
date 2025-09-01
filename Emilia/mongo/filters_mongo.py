@@ -6,52 +6,39 @@ filters = db.filters
 async def add_filter_db(
     chat_id: int, filter_name: str, content: str, text: str, data_type: int
 ):
-    filter_data = await filters.find_one({"chat_id": chat_id})
-
-    if filter_data is None:
-        await filters.insert_one(
+    # Try to update existing filter by name
+    res = await filters.update_one(
+        {"chat_id": chat_id, "filters.filter_name": filter_name},
+        {
+            "$set": {
+                "filters.$.filter_name": filter_name,
+                "filters.$.content": content,
+                "filters.$.text": text,
+                "filters.$.data_type": data_type,
+            }
+        },
+    )
+    if res.matched_count == 0:
+        # First ensure the document exists with an empty filters array
+        await filters.update_one(
+            {"chat_id": chat_id},
+            {"$setOnInsert": {"chat_id": chat_id, "filters": []}},
+            upsert=True,
+        )
+        # Then add the new filter to the existing document
+        await filters.update_one(
+            {"chat_id": chat_id},
             {
-                "chat_id": chat_id,
-                "filters": [
-                    {
+                "$addToSet": {
+                    "filters": {
                         "filter_name": filter_name,
                         "content": content,
                         "text": text,
                         "data_type": data_type,
                     }
-                ],
-            }
+                }
+            },
         )
-
-    else:
-        FILTERS_NAME = await get_filters_list(chat_id)
-        if filter_name not in FILTERS_NAME:
-            await filters.update_one(
-                {"chat_id": chat_id},
-                {
-                    "$addToSet": {
-                        "filters": {
-                            "filter_name": filter_name,
-                            "content": content,
-                            "text": text,
-                            "data_type": data_type,
-                        }
-                    }
-                },
-                upsert=True,
-            )
-        else:
-            await filters.update_one(
-                {"chat_id": chat_id, "filters.filter_name": filter_name},
-                {
-                    "$set": {
-                        "filters.$.filter_name": filter_name,
-                        "filters.$.content": content,
-                        "filters.$.text": text,
-                        "filters.$.data_type": data_type,
-                    }
-                },
-            )
 
 
 async def stop_db(chat_id: int, filter_name: str):
@@ -67,23 +54,18 @@ async def stop_all_db(chat_id: id):
 
 
 async def get_filter(chat_id: int, filter_name: str):
-    filter_data = await filters.find_one({"chat_id": chat_id})
-    if filter_data is not None:
-        filters_ = filter_data["filters"]
-        for filter_ in filters_:
-            if filter_["filter_name"] == filter_name:
-                content = filter_["content"]
-                text = filter_["text"]
-                data_type = filter_["data_type"]
-                return (filter_name, content, text, data_type)
+    doc = await filters.find_one(
+        {"chat_id": chat_id},
+        {"_id": 0, "filters": {"$elemMatch": {"filter_name": filter_name}}},
+    )
+    if doc and doc.get("filters"):
+        f = doc["filters"][0]
+        return (f.get("filter_name"), f.get("content"), f.get("text"), f.get("data_type"))
 
 
 async def get_filters_list(chat_id: int):
-    filter_data = await filters.find_one({"chat_id": chat_id})
-    if filter_data is not None:
-        FILTERS_NAME = list()
-        for filter_name in filter_data["filters"]:
-            FILTERS_NAME.append(filter_name["filter_name"])
-        return FILTERS_NAME
+    doc = await filters.find_one({"chat_id": chat_id}, {"_id": 0, "filters.filter_name": 1})
+    if doc and doc.get("filters"):
+        return [f.get("filter_name") for f in doc["filters"] if f.get("filter_name")]
     else:
         return []

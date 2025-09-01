@@ -1,7 +1,7 @@
 # DONE: SFW
 
 import nekos
-from requests import get
+from Emilia.utils.async_http import get
 
 from Emilia import telethn as meow
 from Emilia.custom_filter import register
@@ -26,24 +26,27 @@ async def send_media(event, img):
 @disable
 async def waifu(event):
     url = f"{url_sfw}waifu"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
 @register(pattern="cosplay", disable=True)
 @disable
 async def waifu(event):
-    r = get("https://waifu-api.vercel.app").json()
-    await send_media(event, r)
+    r = await get("https://waifu-api.vercel.app")
+    r_json = r.json()
+    await send_media(event, r_json)
 
 
 @register(pattern="neko", disable=True)
 @disable
 async def neko(event):
     url = f"{url_sfw}neko"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -51,8 +54,9 @@ async def neko(event):
 @disable
 async def shinobu(event):
     url = f"{url_sfw}shinobu"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -60,8 +64,9 @@ async def shinobu(event):
 @disable
 async def megumin(event):
     url = f"{url_sfw}megumin"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -69,8 +74,9 @@ async def megumin(event):
 @disable
 async def bully(event):
     url = f"{url_sfw}bully"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -78,8 +84,9 @@ async def bully(event):
 @disable
 async def cuddle(event):
     url = f"{url_sfw}cuddle"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -87,8 +94,9 @@ async def cuddle(event):
 @disable
 async def cry(event):
     url = f"{url_sfw}cry"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -96,8 +104,9 @@ async def cry(event):
 @disable
 async def hug(event):
     url = f"{url_sfw}hug"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -105,8 +114,9 @@ async def hug(event):
 @disable
 async def awoo(event):
     url = f"{url_sfw}awoo"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -114,8 +124,9 @@ async def awoo(event):
 @disable
 async def kiss(event):
     url = f"{url_sfw}kiss"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -123,8 +134,9 @@ async def kiss(event):
 @disable
 async def lick(event):
     url = f"{url_sfw}lick"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -132,8 +144,9 @@ async def lick(event):
 @disable
 async def pat(event):
     url = f"{url_sfw}pat"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -141,8 +154,9 @@ async def pat(event):
 @disable
 async def smug(event):
     url = f"{url_sfw}smug"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -150,8 +164,9 @@ async def smug(event):
 @disable
 async def bonk(event):
     url = f"{url_sfw}bonk"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -159,8 +174,9 @@ async def bonk(event):
 @disable
 async def yeet(event):
     url = f"{url_sfw}yeet"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -168,8 +184,9 @@ async def yeet(event):
 @disable
 async def blush(event):
     url = f"{url_sfw}blush"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -177,8 +194,9 @@ async def blush(event):
 @disable
 async def smile(event):
     url = f"{url_sfw}smile"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -186,8 +204,9 @@ async def smile(event):
 @disable
 async def wave(event):
     url = f"{url_sfw}wave"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -195,8 +214,9 @@ async def wave(event):
 @disable
 async def highfive(event):
     url = f"{url_sfw}highfive"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -204,8 +224,9 @@ async def highfive(event):
 @disable
 async def handhold(event):
     url = f"{url_sfw}handhold"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -213,8 +234,9 @@ async def handhold(event):
 @disable
 async def nom(event):
     url = f"{url_sfw}nom"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -222,8 +244,9 @@ async def nom(event):
 @disable
 async def bite(event):
     url = f"{url_sfw}bite"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -231,8 +254,9 @@ async def bite(event):
 @disable
 async def glomp(event):
     url = f"{url_sfw}glomp"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -240,8 +264,9 @@ async def glomp(event):
 @disable
 async def slap(event):
     url = f"{url_sfw}slap"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -249,8 +274,9 @@ async def slap(event):
 @disable
 async def killgif(event):
     url = f"{url_sfw}kill"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -258,8 +284,9 @@ async def killgif(event):
 @disable
 async def kickgif(event):
     url = f"{url_sfw}kick"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -267,8 +294,9 @@ async def kickgif(event):
 @disable
 async def happy(event):
     url = f"{url_sfw}happy"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -276,8 +304,9 @@ async def happy(event):
 @disable
 async def wink(event):
     url = f"{url_sfw}wink"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -285,8 +314,9 @@ async def wink(event):
 @disable
 async def poke(event):
     url = f"{url_sfw}poke"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -294,8 +324,9 @@ async def poke(event):
 @disable
 async def dance(event):
     url = f"{url_sfw}dance"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 
@@ -303,8 +334,9 @@ async def dance(event):
 @disable
 async def cringe(event):
     url = f"{url_sfw}cringe"
-    result = get(url).json()
-    img = result["url"]
+    result = await get(url)
+    result_json = result.json()
+    img = result_json["url"]
     await send_media(event, img)
 
 

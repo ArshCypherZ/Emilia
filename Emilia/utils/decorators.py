@@ -1,6 +1,7 @@
 import time
 from datetime import datetime
 from functools import wraps
+import asyncio
 
 from pyrogram import Client, enums, filters
 from pyrogram.enums import ChatMemberStatus
@@ -12,6 +13,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
 )
 from telethon import errors
+from telethon.errors.rpcerrorlist import PersistentTimestampOutdatedError
 
 from Emilia import BOT_ID, LOGGER, db, pgram, telethn
 from Emilia.helper.chat_status import anon_admin_checker
@@ -51,20 +53,65 @@ def example(example_doc: str):
 
 
 def exception(func):
-    async def wrapped(event, *args, **kwargs):
+    @wraps(func)
+    async def wrapped(*args, **kwargs):
         try:
-            return await func(event, *args, **kwargs)
+            return await func(*args, **kwargs)
+        except PersistentTimestampOutdatedError as e:
+            # Telegram occasionally returns this when local state is behind; treat as transient
+            chat_ctx = None
+            try:
+                if args and hasattr(args[0], "chat_id"):
+                    chat_ctx = getattr(args[0], "chat_id", None)
+                elif len(args) >= 2 and hasattr(args[1], "chat"):
+                    chat_ctx = getattr(args[1].chat, "id", None)
+            except Exception:
+                pass
+            LOGGER.warning(
+                f"PersistentTimestampOutdatedError encountered in {func.__name__} (chat={chat_ctx}). Will ignore and continue. Details: {e}"
+            )
+            # brief backoff to let client resync
+            await asyncio.sleep(0.5)
+            return
         except Exception as e:
             error_message = error_messages.get(type(e), str(e))
 
             if (
                 isinstance(e, errors.RPCError)
-                and e.code == 403
-                and "CHAT_SEND_DOCS_FORBIDDEN" in e.message
+                and getattr(e, "code", None) == 403
+                and "CHAT_SEND_DOCS_FORBIDDEN" in getattr(e, "message", "")
             ):
-                error_message = "I am not allowed to send documents in this chat. Please make me an admin to do so."
+                error_message = (
+                    "I am not allowed to send documents in this chat. Please make me an admin to do so."
+                )
 
-            await event.reply(error_message)
+            # Determine the appropriate reply target for Telethon or Pyrogram
+            reply_target = None
+            # Telethon handler signatures typically pass only the event as first arg
+            if args and args and args[0] and args[0].__class__.__module__.startswith("telethon"):
+                reply_target = args[0]
+            # Pyrogram handler signatures pass (client, message)
+            elif len(args) >= 2:
+                reply_target = args[1]
+
+            try:
+                if reply_target is not None:
+                    if hasattr(reply_target, "reply"):
+                        await reply_target.reply(error_message)
+                    elif hasattr(reply_target, "reply_text"):
+                        await reply_target.reply_text(error_message)
+                    else:
+                        LOGGER.error(
+                            f"Unhandled error in {func.__name__}: {error_message} (no reply method)"
+                        )
+                else:
+                    LOGGER.error(
+                        f"Unhandled error in {func.__name__}: {error_message} (no target)"
+                    )
+            except Exception as send_err:
+                LOGGER.error(
+                    f"Failed to send error message in {func.__name__}: {send_err} | Original: {e}"
+                )
 
     return wrapped
 
@@ -75,7 +122,13 @@ mongo_collection = db.logchannels
 
 async def get_telegram_info_telethon(event):
     id_ = None
-    if not event.is_private:
+    # Prefer explicit private check to determine connection-based routing
+    try:
+        is_private = event.is_private
+    except AttributeError:
+        is_private = False
+
+    if not is_private:
         try:
             id_ = event.message.id
         except AttributeError:
@@ -88,11 +141,25 @@ async def get_telegram_info_telethon(event):
         first_name = None
         admin_id = None
 
-    chat_id = event.chat_id
-    if not str(chat_id).startswith("-100"):
-        chat_id = await GetConnectedChat(admin_id)
+    chat_id = event.chat_id if hasattr(event, "chat_id") else None
 
-    title = await GetChat(chat_id) or event.chat.title
+    # When in PM, try connected chat; otherwise don't force connection logic
+    if is_private:
+        connected = await GetConnectedChat(admin_id) if admin_id else None
+        if connected:
+            chat_id = connected
+            # mark that this is a connected/virtual context, so link-building is skipped
+            id_ = "connected"
+            # Safe title resolution for connected chats
+            title = await GetChat(chat_id) or (getattr(event.chat, "title", None) or "Chat")
+        else:
+            # No connected chat – keep chat_id None and avoid DB lookups
+            title = getattr(event.chat, "title", None) or "Private Chat"
+            chat_id = None
+            id_ = "manual"
+    else:
+        # Group/supergroup/channel: resolve title via DB cache when available
+        title = await GetChat(chat_id) or (getattr(event.chat, "title", None) or "Chat")
 
     return (chat_id, title, first_name, admin_id, id_)
 
@@ -113,10 +180,20 @@ async def get_telegram_info_pyrogram(client, event):
         admin_id = None
 
     chat_id = event.chat.id
-    if not str(chat_id).startswith("-100"):
-        chat_id = await GetConnectedChat(admin_id)
 
-    title = await GetChat(chat_id) or event.chat.title
+    if event.chat.type == enums.ChatType.PRIVATE:
+        connected = await GetConnectedChat(admin_id) if admin_id else None
+        if connected:
+            chat_id = connected
+            id_ = "connected"
+            title = await GetChat(chat_id) or (event.chat.title if hasattr(event.chat, "title") else "Chat")
+        else:
+            # PM with no connection
+            title = event.chat.title if hasattr(event.chat, "title") else "Private Chat"
+            chat_id = None
+            id_ = "manual"
+    else:
+        title = await GetChat(chat_id) or (event.chat.title if hasattr(event.chat, "title") else "Chat")
 
     return (chat_id, title, first_name, admin_id, id_)
 
@@ -146,12 +223,21 @@ def logging(func):
             client, event
         )
 
+        # If we don't have a valid chat to log against, just run the handler
+        if chat_id is None:
+            return await func(*args, **kwargs)
+
         chat_data = await mongo_collection.find_one({"chat_id": chat_id})
         if not (chat_data and "channel_id" in chat_data):
             return await func(*args, **kwargs)
         try:
 
-            result_tuple = await func(*args, **kwargs)
+            result = await func(*args, **kwargs)
+            # Only proceed with logging when the handler returns a structured tuple
+            if not isinstance(result, tuple):
+                return result
+
+            result_tuple = result
             if len(result_tuple) == 3:
                 event_type, user_id, user_name = result_tuple
             else:
@@ -182,8 +268,8 @@ def logging(func):
         )
 
         try:
-            if message_id and message_id != "connected" and message_id != "manual":
-                if event.chat.username:
+            if message_id and message_id not in ("connected", "manual"):
+                if getattr(event.chat, "username", None):
                     log_message += f"\n**Link**: [click here](https://t.me/{event.chat.username}/{message_id})"
                 else:
                     cid = str(chat_id).replace("-100", "")
@@ -344,7 +430,7 @@ def rate_limit(messages_per_window: int, window_seconds: int):
             ]
 
             if len(message_history[user_id]) >= messages_per_window:
-                LOGGER.error(
+                LOGGER.warning(
                     f"Rate limit exceeded for user {user_id}. Allowed {messages_per_window} updates in {window_seconds} seconds for {func.__name__}"
                 )
                 return

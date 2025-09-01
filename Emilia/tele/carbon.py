@@ -1,5 +1,3 @@
-# DONE: Carbon Image
-
 import os
 import random
 

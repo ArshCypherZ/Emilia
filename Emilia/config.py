@@ -29,7 +29,6 @@ class Config(object):
     TEMP_DOWNLOAD_DIRECTORY = "./" # Temporary Download Directory
     BOT_NAME = "Emilia" # Bot Name
     WALL_API = "6950f53" # Wall API from wall.alphacoders.com
-    ORIGINAL_EVENT_LOOP = True # Do not Change
 
 
 class Production(Config):

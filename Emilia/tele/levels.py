@@ -1,5 +1,6 @@
 import datetime as ds
 import time
+import asyncio
 
 from telethon import Button, events
 
@@ -8,6 +9,7 @@ from Emilia import LOGGER, db, telethn
 from Emilia.custom_filter import callbackquery, register
 from Emilia.functions.admins import get_time, is_admin
 from Emilia.utils.decorators import *
+from Emilia.utils.cache import SimpleCache
 
 users_collection = db.chatlevels
 first_name = db.first_name
@@ -24,6 +26,120 @@ ranks = [
 
 levels = 1000
 
+# Lightweight in-memory caches and buffers
+_level_cache = SimpleCache(default_ttl=120)  # per-chat toggle
+_name_cache = SimpleCache(default_ttl=300)   # per-user first_name
+_points_buffer = {}
+_lastmsg_buffer = {}
+_buffer_flush_inflight = False
+_last_flush = 0.0
+_MIN_FLUSH_INTERVAL = 1.0  # seconds
+_MAX_BUFFER_OPS = 200
+
+# Track if periodic flusher has been started to avoid duplicates
+_periodic_flush_started = False
+
+async def _get_level_on(chat_id: int) -> bool:
+    key = f"lvl:{chat_id}"
+    val = _level_cache.get(key)
+    if val is not None:
+        return val
+    exists = await level.find_one({"chat_id": chat_id}) is not None
+    _level_cache.set(key, exists, ttl=120)
+    return exists
+
+async def _get_first_name(user_id: int) -> str:
+    key = f"name:{user_id}"
+    val = _name_cache.get(key)
+    if val is not None:
+        return val
+    doc = await first_name.find_one({"user_id": user_id})
+    name = (doc or {}).get("first_name", "Unknown")
+    _name_cache.set(key, name, ttl=300)
+    return name
+
+async def _flush_points_and_lastmsg():
+    global _points_buffer, _lastmsg_buffer, _buffer_flush_inflight, _last_flush
+    if _buffer_flush_inflight:
+        return
+    _buffer_flush_inflight = True
+    try:
+        # Merge increments and lastmsg into a single update per (user_id, chat_id)
+        merged = {}
+        for (user_id, chat_id), inc in list(_points_buffer.items()):
+            if not inc:
+                continue
+            key = (user_id, chat_id)
+            entry = merged.setdefault(key, {"inc": 0, "set": {}})
+            entry["inc"] += inc
+        for (user_id, chat_id), ts in list(_lastmsg_buffer.items()):
+            key = (user_id, chat_id)
+            entry = merged.setdefault(key, {"inc": 0, "set": {}})
+            entry["set"]["last_message_time"] = ts
+
+        if merged:
+            updates = []
+            for (user_id, chat_id), spec in merged.items():
+                update_doc = {}
+                if spec["inc"]:
+                    update_doc["$inc"] = {"points": spec["inc"]}
+                if spec["set"]:
+                    update_doc["$set"] = spec["set"]
+                updates.append({
+                    "q": {"user_id": user_id, "chat_id": chat_id},
+                    "u": update_doc,
+                    "upsert": True,
+                    "multi": False,
+                })
+            try:
+                # Use Motor's db.command to issue a single update command with many ops
+                await db.command("update", users_collection.name, updates=updates, ordered=False)
+            except Exception as e:
+                LOGGER.error(f"levels flush command error: {e}")
+        _points_buffer.clear()
+        _lastmsg_buffer.clear()
+        _last_flush = time.time()
+    except Exception as e:
+        LOGGER.error(f"levels flush error: {e}")
+    finally:
+        _buffer_flush_inflight = False
+
+async def _schedule_flush(force: bool = False):
+    try:
+        total_ops = len(_points_buffer) + len(_lastmsg_buffer)
+        if not force:
+            if total_ops < _MAX_BUFFER_OPS and (time.time() - _last_flush) < _MIN_FLUSH_INTERVAL:
+                return
+        asyncio.create_task(_flush_points_and_lastmsg())
+    except Exception:
+        pass
+
+async def flush_levels_buffers_now():
+    """Public helper to force-flush buffers now."""
+    await _flush_points_and_lastmsg()
+
+async def start_levels_flush_task(interval_seconds: float = 5.0):
+    """
+    Start a periodic task that flushes level buffers at a low frequency.
+    Safe to call multiple times; only starts once per process.
+    """
+    global _periodic_flush_started
+    if _periodic_flush_started:
+        return
+    _periodic_flush_started = True
+
+    async def _run():
+        while True:
+            try:
+                await asyncio.sleep(max(1.0, float(interval_seconds)))
+                await _flush_points_and_lastmsg()
+            except Exception as e:
+                try:
+                    LOGGER.error(f"levels periodic flush error: {e}")
+                except Exception:
+                    pass
+
+    asyncio.create_task(_run())
 
 async def get_rank(points):
     for rank in ranks[::-1]:
@@ -56,60 +172,43 @@ async def can_collect_coins(user_id, chat_id):
 
 
 async def increase_points(user_id, chat_id, points):
-    present = await first_name.find_one({"user_id": user_id})
-    if not present:
-        await first_name.insert_one({"user_id": user_id})
+    # Ensure user exists in first_name collection for referencing later
+    await first_name.update_one({"user_id": user_id}, {"$setOnInsert": {"user_id": user_id}}, upsert=True)
 
-    user_data = await users_collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}
+    # Targeted upsert without prior read; unique index exists on (chat_id,user_id)
+    await users_collection.update_one(
+        {"user_id": user_id, "chat_id": chat_id}, {"$inc": {"points": points}}, upsert=True
     )
-    update_data = {"$inc": {"points": points}}
-
-    if user_data:
-        await users_collection.update_one({"_id": user_data["_id"]}, update_data)
-    else:
-        await users_collection.insert_one(
-            {"user_id": user_id, "chat_id": chat_id, "points": points}
-        )
 
 
 async def get_leaderboard(chat_id):
-    meow = users_collection.find({"chat_id": chat_id})
-    gae = await meow.to_list(None)
-    return sorted(gae, key=lambda x: x["points"], reverse=True)[:10]
+    # Use Mongo sort + limit
+    cursor = users_collection.find({"chat_id": chat_id}, {"_id": 0, "user_id": 1, "points": 1}).sort("points", -1).limit(10)
+    return await cursor.to_list(length=10)
 
 
 async def get_user_stats(user_id, chat_id):
     user_data = await users_collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}
+        {"user_id": user_id, "chat_id": chat_id}, {"_id": 0, "points": 1}
     )
-    fuser = await first_name.find_one({"user_id": user_id})
-    if fuser and user_data:
-        points = user_data["points"]
-        first_name1 = fuser["first_name"]
-        level = min(points // 10, levels)
-        rank = await get_rank(points)
-
-        return {
-            "points": points,
-            "first_name": first_name1,
-            "level": level,
-            "rank": rank,
-        }
-    else:
+    if not user_data:
         return None
+    points = user_data.get("points", 0)
+    first_name1 = await _get_first_name(user_id)
+    level_val = min(points // 10, levels)
+    rank = await get_rank(points)
+    return {"points": points, "first_name": first_name1, "level": level_val, "rank": rank}
 
 
 async def is_flooding(user_id, chat_id):
+    # use projected fields only
     user_data = await users_collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}
+        {"user_id": user_id, "chat_id": chat_id}, {"_id": 0, "last_message_time": 1}
     )
     if user_data and "last_message_time" in user_data:
         current_time = time.time()
         last_message_time = user_data["last_message_time"]
-        time_difference = current_time - last_message_time
-        if time_difference < 5:
-            return True
+        return (current_time - last_message_time) < 5
     return False
 
 
@@ -117,7 +216,7 @@ async def is_flooding(user_id, chat_id):
 async def _leaderboard(event):
     if not event.is_group:
         return await event.reply("Leaderboard is only for group chats.")
-    if not await level.find_one({"chat_id": event.chat_id}):
+    if not await _get_level_on(event.chat_id):
         return await event.reply(
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
@@ -128,18 +227,9 @@ async def _leaderboard(event):
     if leaderboard:
         lmao += "🏆 **Leaderboard** for this chat:\n\n"
         for idx, user in enumerate(leaderboard, start=1):
-            points = user["points"]
-            user_id = user["user_id"]
-            gay = await first_name.find_one({"user_id": user_id})
-
-            if gay:
-                if "first_name" in gay:
-                    first_name1 = gay["first_name"]
-                else:
-                    first_name1 = "Unknown"
-            else:
-                first_name1 = "Unknown"
-
+            points = user.get("points", 0)
+            user_id = user.get("user_id")
+            first_name1 = await _get_first_name(user_id)
             lmao += (
                 f"{idx}. [{first_name1}](tg://user?id={user_id}) --> {points} points\n"
             )
@@ -155,20 +245,15 @@ async def _leaderboard(event):
 
 @callbackquery(pattern="gleaderboard_")
 async def gleaderboard(event):
-    cursor = users_collection.find().sort("points", -1).limit(10)
+    cursor = users_collection.find({}, {"_id": 0, "user_id": 1, "points": 1}).sort("points", -1).limit(10)
     sorted_players = await cursor.to_list(length=None)
 
-    # Fetch the first_name for each user from the first_name collection
+    # Fetch the first_name for each user using cache
     for player in sorted_players:
         if "user_id" not in player:
             continue
-
         user_id = player["user_id"]
-        first_name_doc = await first_name.find_one({"user_id": user_id})
-        if first_name_doc:
-            player["first_name"] = first_name_doc.get("first_name", "Unknown")
-        else:
-            player["first_name"] = "Unknown"
+        player["first_name"] = await _get_first_name(user_id)
 
     gae = "🏆 **Global Leaderboard** 🏆\n\n"
     for rank, player in enumerate(sorted_players, start=1):
@@ -231,7 +316,7 @@ async def read_last_collection_time_weekly(user_id, chat_id):
         collection_time = user["last_collection_weekly"]
     except BaseException:
         collection_time = None
-    if collection_time:
+    if (collection_time):
         return ds.datetime.fromtimestamp(collection_time)
     else:
         return None
@@ -347,8 +432,9 @@ async def register_(event):
             f"{args} has already been used by someone else. Please try some other name!"
         )
 
+    # Idempotent set of first_name for the user
     await first_name.update_one(
-        {"user_id": event.sender_id}, {"$set": {"first_name": args}}
+        {"user_id": event.sender_id}, {"$set": {"first_name": args}}, upsert=True
     )
     return await event.reply(
         f"Successfully registered as {args}!\nUse /rank to see your stats."
@@ -409,24 +495,26 @@ async def handle_message(event):
         return
 
     if event.from_id:
-        if not await level.find_one({"chat_id": event.chat_id}):
+        if not await _get_level_on(event.chat_id):
             return
         if not (await is_flooding(user_id, chat_id)):
-            await increase_points(user_id, chat_id, 1)
-            await users_collection.update_one(
-                {"user_id": user_id, "chat_id": chat_id},
-                {"$set": {"last_message_time": time.time()}},
-                upsert=True,
-            )
+            # buffer point inc and lastmsg update
+            _points_buffer[(user_id, chat_id)] = _points_buffer.get((user_id, chat_id), 0) + 1
+            _lastmsg_buffer[(user_id, chat_id)] = time.time()
+            await _schedule_flush()
+            # rank up check requires fresh points; read projected doc once
             user_data = await users_collection.find_one(
-                {"user_id": user_id, "chat_id": chat_id}
+                {"user_id": user_id, "chat_id": chat_id}, {"_id": 0, "points": 1}
             )
-            for rank in ranks[::-1]:
-                if user_data["points"] == rank["min_points"]:
-                    name = rank["name"]
-                    await event.reply(
-                        f"Congratulations on reaching new rank {name}\nCheck /rank to know your stats."
-                    )
+            if user_data:
+                pts = user_data.get("points", 0)
+                for r in ranks[::-1]:
+                    if pts == r["min_points"]:
+                        name = r["name"]
+                        await event.reply(
+                            f"Congratulations on reaching new rank {name}\nCheck /rank to know your stats."
+                        )
+                        break
         else:
             pass
 
@@ -456,7 +544,8 @@ async def levelonoff(event):
                 return await event.reply(
                     "Level System is already enabled in this chat."
                 )
-            await level.insert_one({"chat_id": event.chat_id})
+            # Idempotent enable using upsert
+            await level.update_one({"chat_id": event.chat_id}, {"$setOnInsert": {"chat_id": event.chat_id}}, upsert=True)
             await event.reply("Level System Enabled.")
             return "LEVEL_ON", None, None
         elif check[1] in OFF_ARG:

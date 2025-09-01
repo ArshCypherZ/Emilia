@@ -1,14 +1,15 @@
-import aiohttp
-
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
+from Emilia.utils.async_http import get
 
 
 async def fetch_question(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            data = await response.json()
-            return data.get("question")
+    r = await get(url)
+    try:
+        data = r.json()
+    except Exception:
+        return None
+    return data.get("question")
 
 
 async def get_dare_question():
@@ -33,6 +34,3 @@ async def truth(event):
     truth = await get_truth_question()
     if truth:
         await event.reply(f"{truth}")
-
-
-# DONE: Truth or Dare

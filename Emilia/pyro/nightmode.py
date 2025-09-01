@@ -109,11 +109,6 @@ async def start_nightmode():
             LOGGER.error(f"Unable To close group {add_chat} - {e}")
 
 
-scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
-scheduler.add_job(start_nightmode, trigger="cron", hour=23, minute=59)
-scheduler.start()
-
-
 async def close_nightmode():
     chats = []
     schats = await get_nightchats()
@@ -133,5 +128,5 @@ async def close_nightmode():
 
 
 scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
+scheduler.add_job(start_nightmode, trigger="cron", hour=23, minute=59)
 scheduler.add_job(close_nightmode, trigger="cron", hour=6, minute=1)
-scheduler.start()

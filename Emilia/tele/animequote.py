@@ -3,12 +3,12 @@
 import json
 import random
 
-import aiohttp
 from telethon import Button
 
 from Emilia import telethn as meow
 from Emilia.custom_filter import callbackquery, register
 from Emilia.helper.disable import disable
+from Emilia.utils.async_http import get
 
 
 async def anime_quote(anime):
@@ -17,17 +17,15 @@ async def anime_quote(anime):
     else:
         url = f"https://animechan.xyz/api/random/anime?title={anime}"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            try:
-                data = await response.text()
-                dic = json.loads(data)
-                quote = dic["quote"]
-                character = dic["character"]
-                animes = dic["anime"]
-                return quote, character, animes
-            except BaseException:
-                return None, None, None
+    r = await get(url)
+    try:
+        dic = r.json()
+        quote = dic["quote"]
+        character = dic["character"]
+        animes = dic["anime"]
+        return quote, character, animes
+    except BaseException:
+        return None, None, None
 
 
 @register(pattern="quote", disable=True)

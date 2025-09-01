@@ -13,7 +13,7 @@ antichanneldb = db.antichannel
 
 
 async def antichannelmode_on(chat_id: int):
-    return await antichanneldb.insert_one({"chat_id": chat_id})
+    return await antichanneldb.update_one({"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True)
 
 
 async def antichannelmode_off(chat_id: int):

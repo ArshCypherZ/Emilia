@@ -1,12 +1,10 @@
-# DONE: Write Module
-
-import aiohttp
 import os
 from telethon import events
 
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
+from Emilia.utils.async_http import get
 
 
 @register(pattern="write", disable=True)
@@ -15,16 +13,15 @@ from Emilia.utils.decorators import *
 async def writer(m: events.NewMessage):
     async def process_text(text):
         encoded_text = text.replace(" ", "%20")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"https://apis.xditya.me/write?text={encoded_text}"
-            ) as response:
-                if response.status == 200:
-                    image_data = await response.read()
-                    with open("write_image.png", "wb") as f:
-                        f.write(image_data)
-                    return "done"
-                return None
+        r = await get(
+            f"https://apis.xditya.me/write?text={encoded_text}"
+        )
+        if r.status_code == 200:
+            image_data = r.content
+            with open("write_image.png", "wb") as f:
+                f.write(image_data)
+            return "done"
+        return None
 
     if not m.reply_to_msg_id:
         try:

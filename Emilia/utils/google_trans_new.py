@@ -4,8 +4,9 @@ import random
 import re
 from urllib.parse import quote
 
-import requests
+import aiohttp
 import urllib3
+from Emilia.helper.http import get_aiohttp_session
 
 LANGUAGES = {
     "af": "afrikaans",
@@ -423,7 +424,7 @@ class google_translator:
         freq = freq_initial
         return freq
 
-    def translate(self, text, lang_tgt="auto", lang_src="auto", pronounce=False):
+    async def translate(self, text, lang_tgt="auto", lang_src="auto", pronounce=False):
         try:
             LANGUAGES[lang_src]
         except Exception:
@@ -445,73 +446,68 @@ class google_translator:
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         }
         freq = self._package_rpc(text, lang_src, lang_tgt)
-        response = requests.Request(
-            method="POST",
-            url=self.url,
-            data=freq,
-            headers=headers,
-        )
+        
         try:
-            if self.proxies is None or not isinstance(self.proxies, dict):
-                self.proxies = {}
-            with requests.Session() as s:
-                s.proxies = self.proxies
-                r = s.send(
-                    request=response.prepare(), verify=False, timeout=self.timeout
-                )
-            for line in r.iter_lines(chunk_size=1024):
-                decoded_line = line.decode("utf-8")
-                if "MkEWBc" in decoded_line:
-                    try:
-                        response = decoded_line
-                        response = json.loads(response)
-                        response = list(response)
-                        response = json.loads(response[0][2])
-                        response_ = list(response)
-                        response = response_[1][0]
-                        if len(response) == 1:
-                            if len(response[0]) > 5:
-                                sentences = response[0][5]
-                            else:  # only url
-                                sentences = response[0][0]
+            # Use shared session; pass per-request proxy and timeout.
+            proxy = None
+            if self.proxies:
+                proxy = self.proxies.get("http") or self.proxies.get("https")
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            session = await get_aiohttp_session()
+            async with session.post(self.url, data=freq, headers=headers, ssl=False, proxy=proxy, timeout=timeout) as r:
+                async for line in r.content.iter_chunked(1024):
+                    decoded_line = line.decode("utf-8")
+                    if "MkEWBc" in decoded_line:
+                        try:
+                            response = decoded_line
+                            response = json.loads(response)
+                            response = list(response)
+                            response = json.loads(response[0][2])
+                            response_ = list(response)
+                            response = response_[1][0]
+                            if len(response) == 1:
+                                if len(response[0]) > 5:
+                                    sentences = response[0][5]
+                                else:  # only url
+                                    sentences = response[0][0]
+                                    if pronounce is False:
+                                        return sentences
+                                    elif pronounce:
+                                        return [sentences, None, None]
+                                translate_text = ""
+                                for sentence in sentences:
+                                    sentence = sentence[0]
+                                    translate_text += sentence.strip() + " "
+                                translate_text = translate_text
+                                if pronounce is False:
+                                    return translate_text
+                                elif pronounce:
+                                    pronounce_src = response_[0][0]
+                                    pronounce_tgt = response_[1][0][0][1]
+                                    return [translate_text, pronounce_src, pronounce_tgt]
+                            elif len(response) == 2:
+                                sentences = []
+                                for i in response:
+                                    sentences.append(i[0])
                                 if pronounce is False:
                                     return sentences
                                 elif pronounce:
-                                    return [sentences, None, None]
-                            translate_text = ""
-                            for sentence in sentences:
-                                sentence = sentence[0]
-                                translate_text += sentence.strip() + " "
-                            translate_text = translate_text
-                            if pronounce is False:
-                                return translate_text
-                            elif pronounce:
-                                pronounce_src = response_[0][0]
-                                pronounce_tgt = response_[1][0][0][1]
-                                return [translate_text, pronounce_src, pronounce_tgt]
-                        elif len(response) == 2:
-                            sentences = []
-                            for i in response:
-                                sentences.append(i[0])
-                            if pronounce is False:
-                                return sentences
-                            elif pronounce:
-                                pronounce_src = response_[0][0]
-                                pronounce_tgt = response_[1][0][0][1]
-                                return [sentences, pronounce_src, pronounce_tgt]
-                    except Exception as e:
-                        raise e
-            r.raise_for_status()
-        except requests.exceptions.ConnectTimeout as e:
+                                    pronounce_src = response_[0][0]
+                                    pronounce_tgt = response_[1][0][0][1]
+                                    return [sentences, pronounce_src, pronounce_tgt]
+                        except Exception as e:
+                            raise e
+                r.raise_for_status()
+        except aiohttp.ClientConnectorError as e:
             raise e
-        except requests.exceptions.HTTPError as e:
+        except aiohttp.ClientResponseError as e:
             # Request successful, bad response
-            raise google_new_transError(tts=self, response=r)
-        except requests.exceptions.RequestException as e:
+            raise google_new_transError(tts=self, response=None)
+        except Exception as e:
             # Request failed
             raise google_new_transError(tts=self)
 
-    def detect(self, text):
+    async def detect(self, text):
         text = str(text)
         if len(text) >= 5000:
             return log.debug("Warning: Can only detect less than 5000 characters")
@@ -525,40 +521,36 @@ class google_translator:
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         }
         freq = self._package_rpc(text)
-        response = requests.Request(
-            method="POST", url=self.url, data=freq, headers=headers
-        )
+        
         try:
-            if self.proxies is None or not isinstance(self.proxies, dict):
-                self.proxies = {}
-            with requests.Session() as s:
-                s.proxies = self.proxies
-                r = s.send(
-                    request=response.prepare(), verify=False, timeout=self.timeout
-                )
-
-            for line in r.iter_lines(chunk_size=1024):
-                decoded_line = line.decode("utf-8")
-                if "MkEWBc" in decoded_line:
-                    # regex_str = r"\[\[\"wrb.fr\",\"MkEWBc\",\"\[\[(.*).*?,\[\[\["
-                    try:
-                        # data_got = re.search(regex_str,decoded_line).group(1)
-                        response = decoded_line
-                        response = json.loads(response)
-                        response = list(response)
-                        response = json.loads(response[0][2])
-                        response = list(response)
-                        detect_lang = response[0][2]
-                    except Exception:
-                        raise Exception
-                    # data_got = data_got.split('\\\"]')[0]
-                    return [detect_lang, LANGUAGES[detect_lang.lower()]]
-            r.raise_for_status()
-        except requests.exceptions.HTTPError as e:
+            proxy = None
+            if self.proxies:
+                proxy = self.proxies.get("http") or self.proxies.get("https")
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            session = await get_aiohttp_session()
+            async with session.post(self.url, data=freq, headers=headers, ssl=False, proxy=proxy, timeout=timeout) as r:
+                async for line in r.content.iter_chunked(1024):
+                    decoded_line = line.decode("utf-8")
+                    if "MkEWBc" in decoded_line:
+                        # regex_str = r"\[\[\"wrb.fr\",\"MkEWBc\",\"\[\[(.*).*?,\[\[\["
+                        try:
+                            # data_got = re.search(regex_str,decoded_line).group(1)
+                            response = decoded_line
+                            response = json.loads(response)
+                            response = list(response)
+                            response = json.loads(response[0][2])
+                            response = list(response)
+                            detect_lang = response[0][2]
+                        except Exception:
+                            raise Exception
+                        # data_got = data_got.split('\\\"]')[0]
+                        return [detect_lang, LANGUAGES[detect_lang.lower()]]
+                r.raise_for_status()
+        except aiohttp.ClientResponseError as e:
             # Request successful, bad response
             log.debug(str(e))
-            raise google_new_transError(tts=self, response=r)
-        except requests.exceptions.RequestException as e:
+            raise google_new_transError(tts=self, response=None)
+        except Exception as e:
             # Request failed
             log.debug(str(e))
             raise google_new_transError(tts=self)

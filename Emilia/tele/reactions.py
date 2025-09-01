@@ -1,4 +1,3 @@
-# DONE: Reactions
 import random
 
 from Emilia import telethn as meow

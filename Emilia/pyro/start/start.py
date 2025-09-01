@@ -1,9 +1,11 @@
+import os
 from pyrogram import Client
 from pyrogram.enums import ChatType
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from bson.objectid import ObjectId
 
-from Emilia import custom_filter, BOT_NAME, TOKEN, ORIGINAL_EVENT_LOOP, SUPPORT_CHAT, UPDATE_CHANNEL, START_PIC
-from Emilia.anime.bot import get_anime, get_recommendations, auth_link_cmd, logout_cmd
+from Emilia import custom_filter, BOT_NAME, TOKEN, SUPPORT_CHAT, UPDATE_CHANNEL, START_PIC
+from Emilia.anime.bot import get_anime, get_recommendations, auth_link_cmd, logout_cmd, get_additional_info, code_cmd
 from Emilia.pyro.connection.connect import connectRedirect
 from Emilia.pyro.greetings.captcha.button_captcha import buttonCaptchaRedirect
 from Emilia.pyro.greetings.captcha.text_captcha import textCaptchaRedirect
@@ -11,6 +13,8 @@ from Emilia.pyro.notes.private_notes import note_redirect
 from Emilia.pyro.rules.rules import rulesRedirect
 from Emilia.utils.decorators import *
 from Emilia.tele.clone import startpic
+from Emilia.utils.helper import AUTH_USERS, get_btns
+from Emilia.anime.bot import help_
 
 START_TEXT = """
 Welcome to [{} :3]({})
@@ -21,6 +25,7 @@ This bot give varieties of features such as
 ➩ Fun like chatbot
 ➩ Clone, Ranking, AI System
 ➩ Anime Loaded Modules
+➩ Inline Games
 
 Use the buttons buttons or /help to checkout even more!
 """
@@ -32,6 +37,17 @@ Use the buttons buttons or /help to checkout even more!
 async def starttt(client, message):
     if len(message.text.split()) == 1:
         if message.chat.type == ChatType.PRIVATE:
+            # Get the current bot's ID from its token to determine which start picture to use
+            current_bot_id = int(client.bot_token.split(":")[0])
+
+            # Look up custom start picture for this specific bot
+            custom_start_pic = None
+            pic_data = await startpic.find_one({"bot_id": current_bot_id})
+            if pic_data:
+                custom_start_pic = pic_data.get("file_id") or pic_data.get("url")
+            
+            start_pic_url = custom_start_pic if custom_start_pic else START_PIC
+            
             buttons = [
                 [InlineKeyboardButton("Help", callback_data="help_back")],
                 [
@@ -45,7 +61,7 @@ async def starttt(client, message):
             ]
             
             await message.reply_text(
-                START_TEXT.format(BOT_NAME, START_PIC),
+                START_TEXT.format(BOT_NAME, start_pic_url),
                 reply_markup=InlineKeyboardMarkup(buttons),
                 disable_web_page_preview=False,
             )
@@ -158,9 +174,10 @@ Clones inherit all functionalities, updates, and database entries from the origi
 4. Select a username for your clone.
 5. Copy the API token provided by @BotFather.
 6. Send the API token to Emilia via private message using `/clone [apitokenhere]`. Ensure to remove '[ ]'.
-7. You're all set!
+7. **Your clone goes live instantly!**
 
 To modify the profile picture of your clone, send /setuserpic to @BotFather, choose the clone, and upload the new image.
+
 
 **CAUTION**: When adding a clone to a group, remember to assign it administrator privileges!
 """
@@ -171,7 +188,7 @@ To solve this issue, we have introduced the clone feature. Without the need for 
 
 **Clone Commands:**
 
-• /clone `[bottoken]`: Clones @Elf_Robot to your provided bot. Make sure to remove the square brackets.
+• /clone `[bottoken]`: Clones @Elf_Robot to your provided bot. **Goes live instantly!** Make sure to remove the square brackets.
 • /deleteclone `[bottoken]`: Deletes the cloned bot from our server.
 • /setstartpic `[picurl]`: Sets the start pic for your cloned bot.
 • /broadcast `-flag [reply]`: Broadcasts the replied message to all the groups where the cloned bot is present.
@@ -185,7 +202,7 @@ Example:
 - `/broadcast -all [reply to message]`
 
 
-**Note:** The bot will get restarted every 12 hours and it uses the same database as the main bot. Please do not use this feature for illegal purposes. We will not be responsible for any misuse.
+**Note:** The clones use the same database as the main bot. Please do not use this feature for illegal purposes. We will not be responsible for any misuse.
 
 PS: If you need any help, feel free to ask in our support group [here.](https://t.me/SpiralTechDivision) I have created this feature with my heart, and it took a lot of time and effort. So, please don't hesitate to /donate to keep this feature alive.
 In future, we might close this feature and make it premium. So, use it now and enjoy :3

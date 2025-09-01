@@ -20,7 +20,7 @@ The following modules will have their data exported:
 **Chat owner commands**:
 • /export: Generate a file containing all your chat data.
 • /import: Import the settings in the replied to data file.
-• /reset: Reset all the chat settings. This means removing all settings.
+• /chatreset: Reset all the chat settings. This means removing all settings.
 
 **Examples**:
 • To export only specific categories, use:

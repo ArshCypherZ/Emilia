@@ -1,5 +1,3 @@
-# DONE: Mention All
-
 import asyncio
 from telethon import events
 import Emilia.strings as strings

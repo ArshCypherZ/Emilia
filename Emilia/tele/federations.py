@@ -1,5 +1,3 @@
-# DONE: Federations
-
 import csv
 from datetime import datetime
 import json

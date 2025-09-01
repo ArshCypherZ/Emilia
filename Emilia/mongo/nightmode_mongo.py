@@ -4,7 +4,7 @@ nightdb = db.nightmode
 
 
 async def nightmode_on(chat_id: int):
-    return nightdb.insert_one({"chat_id": chat_id})
+    return nightdb.update_one({"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True)
 
 
 async def nightmode_off(chat_id: int):
@@ -12,10 +12,8 @@ async def nightmode_off(chat_id: int):
 
 
 async def get_nightchats() -> list:
-    chats = nightdb.find({"chat_id": {"$lt": 0}})
-    if not chats:
-        return []
+    cursor = nightdb.find({"chat_id": {"$lt": 0}}, {"_id": 0, "chat_id": 1})
     chats_list = []
-    for chat in await chats.to_list(length=1000000000):
-        chats_list.append(chat)
+    async for doc in cursor:
+        chats_list.append(doc)
     return chats_list

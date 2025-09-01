@@ -211,7 +211,6 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
 
     # When use click on correct CAPTCHA button
     elif RandomString == correct_captcha:
-        # Check in re CAPTCHA is enable
         if await isRuleCaptcha(chat_id=chat_id):
             await pgram.delete_messages(
                 chat_id=user_id, message_ids=callback_query.message.id

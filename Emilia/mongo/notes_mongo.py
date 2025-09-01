@@ -11,7 +11,6 @@ async def SaveNote(chat_id, note_name, content, text, data_type):
             "chat_id": chat_id,
             "notes": [
                 {
-                    "_id": 1,
                     "note_name": note_name,
                     "content": content,
                     "text": text,
@@ -20,41 +19,30 @@ async def SaveNote(chat_id, note_name, content, text, data_type):
             ],
         }
 
-        await notes.insert_one(NoteData)
+        # Use idempotent upsert to avoid duplicates on initial create
+        await notes.update_one(
+            {"chat_id": chat_id}, {"$setOnInsert": NoteData}, upsert=True
+        )
     else:
-        NotesNamesList = []
-        if "notes" in GetNotes:
-            totalNote = len(GetNotes["notes"])
-            NotesIDs = totalNote + 1
-
-            notesDict = GetNotes["notes"]
-
-            for get_notes in notesDict:
-                note = get_notes["note_name"]
-                NotesNamesList.append(note)
-
-            if note_name in NotesNamesList:
-                await notes.update_one(
-                    {"chat_id": chat_id, "notes.note_name": note_name},
-                    {
-                        "$set": {
-                            "notes.$.note_name": note_name,
-                            "notes.$.content": content,
-                            "notes.$.text": text,
-                            "notes.$.data_type": data_type,
-                        }
-                    },
-                    False,
-                    True,
-                )
-
-            else:
+        if GetNotes.get("notes"):
+            # Upsert or add uniquely by note_name
+            updated = await notes.update_one(
+                {"chat_id": chat_id, "notes.note_name": note_name},
+                {
+                    "$set": {
+                        "notes.$.note_name": note_name,
+                        "notes.$.content": content,
+                        "notes.$.text": text,
+                        "notes.$.data_type": data_type,
+                    }
+                },
+            )
+            if updated.matched_count == 0:
                 await notes.update_one(
                     {"chat_id": chat_id},
                     {
-                        "$push": {
+                        "$addToSet": {
                             "notes": {
-                                "_id": NotesIDs,
                                 "note_name": note_name,
                                 "content": content,
                                 "text": text,
@@ -71,7 +59,6 @@ async def SaveNote(chat_id, note_name, content, text, data_type):
                     "$set": {
                         "notes": [
                             {
-                                "_id": NotesIDs,
                                 "note_name": note_name,
                                 "content": content,
                                 "text": text,
@@ -84,53 +71,36 @@ async def SaveNote(chat_id, note_name, content, text, data_type):
 
 
 async def GetNote(chat_id, note_name):
-    GetNoteData = await notes.find_one({"chat_id": chat_id})
-
-    if GetNoteData is not None:
-        Getnotes = GetNoteData["notes"]
-        for note in Getnotes:
-            GetNote = note["note_name"]
-            if GetNote == note_name:
-                content = note["content"]
-                text = note["text"]
-                data_type = note["data_type"]
-                return (content, text, data_type)
-    else:
-        return None
+    doc = await notes.find_one(
+        {"chat_id": chat_id, "notes.note_name": note_name},
+        {"notes": {"$elemMatch": {"note_name": note_name}}},
+    )
+    if doc and doc.get("notes"):
+        n = doc["notes"][0]
+        return (n["content"], n["text"], n["data_type"])
+    return None
 
 
 async def isNoteExist(chat_id, note_name) -> bool:
-    GetNoteData = await notes.find_one({"chat_id": chat_id})
-    if GetNoteData is not None and "notes" in GetNoteData:
-        gnotes = GetNoteData["notes"]
-        notes_list = []
-        for Getnotes in gnotes:
-            n_name = Getnotes["note_name"]
-            notes_list.append(n_name)
-        if note_name in notes_list:
-            return True
-        else:
-            return False
-    return False
+    note_count = await notes.count_documents(
+        {"chat_id": chat_id, "notes.note_name": note_name}
+    )
+    return note_count > 0
 
 
 async def NoteList(chat_id) -> list:
-    NotesNamesList = []
-    GetNoteData = await notes.find_one({"chat_id": chat_id})
-    if GetNoteData is not None:
-        if "notes" in GetNoteData:
-            Getnotes = GetNoteData["notes"]
-            for note in Getnotes:
-                NoteText = note["text"]
-                NoteNames = note["note_name"]
-                if "{admin}" in NoteText:
-                    NoteNames = NoteNames + " " + "__{admin}__"
-                NotesNamesList.append(NoteNames)
-            return NotesNamesList
-        else:
-            return NotesNamesList
-    else:
-        return NotesNamesList
+    names = []
+    doc = await notes.find_one({"chat_id": chat_id}, {"notes.text": 1, "notes.note_name": 1})
+    if doc and doc.get("notes"):
+        for note in doc["notes"]:
+            NoteText = note.get("text") or ""
+            NoteName = note.get("note_name")
+            if not NoteName:
+                continue
+            if "{admin}" in NoteText:
+                NoteName = f"{NoteName} __{admin}__"
+            names.append(NoteName)
+    return names
 
 
 async def ClearNote(chat_id, note_name):
@@ -146,16 +116,13 @@ async def set_private_note(chat_id, private_note):
 
 
 async def is_pnote_on(chat_id) -> bool:
-    GetNoteData = await notes.find_one({"chat_id": chat_id})
+    GetNoteData = await notes.find_one({"chat_id": chat_id}, {"private_note": 1})
     if GetNoteData is not None:
-        if "private_note" in GetNoteData:
-            private_note = GetNoteData["private_note"]
-            return private_note
-        else:
-            return False
+        return bool(GetNoteData.get("private_note"))
     else:
         return False
 
 
 async def ClearAllNotes(chat_id):
-    await notes.update_one({"chat_id": chat_id}, {"$unset": {"notes": []}})
+    # Use correct MongoDB $unset semantics: the value is ignored, but should not be an array
+    await notes.update_one({"chat_id": chat_id}, {"$unset": {"notes": ""}})

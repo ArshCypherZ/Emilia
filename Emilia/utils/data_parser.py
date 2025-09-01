@@ -2,7 +2,7 @@ import os
 import time
 from datetime import datetime
 
-import requests
+from Emilia.utils.async_http import post, get
 from bs4 import BeautifulSoup
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -1157,7 +1157,7 @@ async def get_additional_info(
     if req == "desc":
         synopsis = data.get("description")
         if os.environ.get("PREFERRED_LANGUAGE"):
-            synopsis = tr.translate(
+            synopsis = await tr.translate(
                 synopsis, lang_tgt=os.environ.get("PREFERRED_LANGUAGE")
             )
         return (pic if ctgry == "ANI" else data["image"]["large"]), synopsis
@@ -1520,7 +1520,7 @@ async def get_manga(qdb, page, auth: bool = False, user: int = None, cid: int = 
     finals_ += f"{bl}**{text[0]}:** `{source}`\n"
     finals_ += user_data
     if os.environ.get("PREFERRED_LANGUAGE"):
-        description = tr.translate(
+        description = await tr.translate(
             description, lang_tgt=os.environ.get("PREFERRED_LANGUAGE")
         )
     findesc = "" if description == "" else f"`{description}`"
@@ -1702,7 +1702,8 @@ async def get_scheduled(x: int = 9):
     base_url = "https://api.jikan.moe/v4/schedules/"
     day = str(day_(x if x != 9 else datetime.now().weekday())).lower()
     out = f"Scheduled animes for {day.capitalize()}\n\n"
-    data = requests.get(base_url + day).json()
+    response = await get(base_url + day)
+    data = response.json()
     sched_ls = data["data"]
     for i in sched_ls:
         try:
@@ -1718,8 +1719,9 @@ async def get_scheduled(x: int = 9):
 #### chiaki part ####
 
 
-def get_wols(x: str):
-    data = requests.get(f"https://chiaki.vercel.app/search2?query={x}").json()
+async def get_wols(x: str):
+    response = await get(f"https://chiaki.vercel.app/search2?query={x}")
+    data = response.json()
     ls = []
     for i in data:
         sls = [data[i], i]
@@ -1727,8 +1729,9 @@ def get_wols(x: str):
     return ls
 
 
-def get_wo(x: int, page: int):
-    data = requests.get(f"https://chiaki.vercel.app/get2?group_id={x}").json()
+async def get_wo(x: int, page: int):
+    response = await get(f"https://chiaki.vercel.app/get2?group_id={x}")
+    data = response.json()
     msg = "Watch order for the given query is:\n\n"
     out = []
     for i in data:
@@ -1745,8 +1748,9 @@ def get_wo(x: int, page: int):
 ##### Anime Fillers Part #####
 
 
-def search_filler(query):
-    html = requests.get("https://www.animefillerlist.com/shows").text
+async def search_filler(query):
+    response = await get("https://www.animefillerlist.com/shows")
+    html = response.text
     soup = BeautifulSoup(html, "html.parser")
     div = soup.findAll("div", attrs={"class": "Group"})
     index = {}
@@ -1764,9 +1768,10 @@ def search_filler(query):
     return ret
 
 
-def parse_filler(filler_id):
+async def parse_filler(filler_id):
     url = "https://www.animefillerlist.com/shows/" + filler_id
-    html = requests.get(url).text
+    response = await get(url)
+    html = response.text
     soup = BeautifulSoup(html, "html.parser")
     div = soup.find("div", attrs={"id": "Condensed"})
     all_ep = div.find_all("span", attrs={"class": "Episodes"})

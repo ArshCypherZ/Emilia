@@ -1,6 +1,7 @@
-from pyrogram.types import InlineKeyboardButton
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia.__main__ import HIDDEN_MOD
+from Emilia.data import HIDDEN_MOD
+from Emilia import LOGGER
 
 
 class EqInlineKeyboardButton(InlineKeyboardButton):
@@ -46,14 +47,14 @@ def paginate_modules(_page_n, module_dict, prefix, chat=None):
     for module in modules:
         if HIDDEN_MOD.get(module.text.lower()) is None:
             pair.append(module)
-            if len(pair) > 2:
+            if len(pair) == 3:
                 pairs.append(pair)
                 pair = []
 
     if pair:
         pairs.append(pair)
 
-    return pairs
+    return InlineKeyboardMarkup(pairs)
 
 
 async def build_keyboard(buttons):

@@ -83,7 +83,7 @@ async def excecute_operation(
             view_messages=False,
         )
         await event.respond(
-            f'<b>Banned</b> <a href="tg://user?id={user_id}">{name}</a> for {get_time(int(tt))}!{r}',
+            f'<b>Banned</b> <a href="tg://user?id={user_id}">{name}</a> for {(await get_time(int(tt)))}!{r}',
             parse_mode="html",
             reply_to=reply_to,
         )
@@ -660,12 +660,14 @@ async def dnd(e):
 
 @telethn.on(events.ChatAction(func=lambda e: e.user_joined))
 async def dndtr(e):
-    if not e.user.username:
-        x = await xdb.dnd.find_one({"chat_id": e.chat_id})
-        x = x["mode"] if x else None
-        if not x:
-            return
-        try:
-            await e.client.kick_participant(e.chat_id, e.user_id)
-        except BaseException:
-            pass
+    # Guard against None user (deleted accounts, system, etc.)
+    if not getattr(e, "user", None) or not getattr(e.user, "username", None):
+        return
+    x = await xdb.dnd.find_one({"chat_id": e.chat_id})
+    x = x["mode"] if x else None
+    if not x:
+        return
+    try:
+        await e.client.kick_participant(e.chat_id, e.user_id)
+    except BaseException:
+        pass

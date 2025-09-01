@@ -194,7 +194,7 @@ async def mam(_, message):
 - /approved
 - /export
 - /import
-- /reset
+- /chatreset
 - /silentactions
 - /actiontopic"""
     keyboard = [

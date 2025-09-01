@@ -26,12 +26,10 @@ async def passedAction(chat_id: int, user_id: int, message_id: int):
     else:
         reply_markup = None
 
-    # Edit the main chat
     await pgram.edit_message_reply_markup(
         chat_id=chat_id, message_id=message_id, reply_markup=reply_markup
     )
 
-    # Delete user's captcha data and append them into varified list
     await DeleteUsercaptchaData(chat_id, user_id)
     await AppendVerifiedUsers(chat_id, user_id)
 

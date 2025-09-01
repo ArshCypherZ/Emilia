@@ -24,8 +24,8 @@ async def unset_afk(user_id):
 
 
 async def is_afk(user_id):
-    _afk = await afk_collection.find_one({"user_id": user_id})
-    return bool(_afk)
+    _afk = await afk_collection.count_documents({"user_id": user_id})
+    return _afk > 0
 
 
 async def get_afk_user(user_id):

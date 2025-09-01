@@ -1,10 +1,9 @@
 # DONE: Wikipedia
 
-import aiohttp
 import wikipedia
 from wikipedia.exceptions import DisambiguationError, PageError
 
-from Emilia import telethn as meow
+from Emilia import telethn as meow, LOGGER
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
@@ -44,14 +43,12 @@ async def wiki(event):
         search_query = input_args[1].strip()
 
     try:
-        async with aiohttp.ClientSession() as session:
-            wikipedia.set_lang("en")
-            wikipedia.set_rate_limiting(True)
-            AsyncWikipedia.session = session
-            summary = await get_wikipedia_summary(search_query)
-            result = f"<b>{search_query}</b>\n\n"
-            result += f"<i>{summary}</i>\n"
-            result += f"""<a href="https://en.wikipedia.org/wiki/{search_query.replace(" ", "%20")}">Read more...</a>"""
+        wikipedia.set_lang("en")
+        wikipedia.set_rate_limiting(True)
+        summary = await get_wikipedia_summary(search_query)
+        result = f"<b>{search_query}</b>\n\n"
+        result += f"<i>{summary}</i>\n"
+        result += f"""<a href="https://en.wikipedia.org/wiki/{search_query.replace(" ", "%20")}">Read more...</a>"""
     except DisambiguationError as e:
         result = (
             f"Disambiguated pages found! Adjust your query accordingly.\n\n<i>{e}</i>"
@@ -59,7 +56,7 @@ async def wiki(event):
     except PageError as e:
         result = f"<code>{e}</code>"
     except Exception as e:
-        print(f"Error: {e}")
+        LOGGER.error(f"Error: {e}")
         result = "An error occurred while processing your request."
 
     if len(result) > 4000:

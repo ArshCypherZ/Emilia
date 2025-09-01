@@ -1,7 +1,7 @@
 import logging
+import os
+import sys
 
-import uvloop
-from aiohttp import ClientSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from motor import motor_asyncio
 from pyrogram import Client
@@ -9,18 +9,41 @@ from telethon import TelegramClient
 
 from Emilia.config import Development as Config
 
-# enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("log.txt"), logging.StreamHandler()],
-    level=logging.INFO,
-)
+def _setup_emilia_logging():
+    # If root has no handlers yet, configure it at INFO with console+file
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            level=logging.INFO,
+            handlers=[
+                logging.StreamHandler(sys.stdout),
+                logging.FileHandler("log.txt"),
+            ],
+        )
+    # Configure the package logger explicitly
+    logger = logging.getLogger("Emilia")
+    logger.setLevel(logging.INFO)
 
-LOGGER = logging.getLogger(__name__)
+    # Ensure at least one console handler to stdout at INFO for this logger
+    has_console = any(isinstance(h, logging.StreamHandler) for h in logger.handlers)
+    if not has_console:
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setLevel(logging.INFO)
+        sh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(sh)
 
+    # Avoid duplicate lines if root also has handlers
+    logger.propagate = False
+    return logger
 
-TOKEN = Config.TOKEN
-OWNER_ID = int(Config.OWNER_ID)
+LOGGER = _setup_emilia_logging()
+
+IS_CLONE = os.environ.get("EMILIA_IS_CLONE", "false").lower() == "true"
+TOKEN = os.environ.get("EMILIA_TOKEN", Config.TOKEN)
+OWNER_ID = int(os.environ.get("EMILIA_OWNER_ID", Config.OWNER_ID))
+
+SESSION_NAME = f"emilia_clone_{OWNER_ID}" if IS_CLONE else "emilia_main"
+
 DEV_USERS = {int(x) for x in Config.DEV_USERS or []}
 EVENT_LOGS = Config.EVENT_LOGS
 API_ID = Config.API_ID
@@ -31,47 +54,6 @@ BOT_USERNAME = Config.BOT_USERNAME
 UPDATE_CHANNEL = Config.UPDATE_CHANNEL
 START_PIC = Config.START_PIC
 CLONE_LIMIT = Config.CLONE_LIMIT
-
-DEV_USERS.add(OWNER_ID)
-
-scheduler = AsyncIOScheduler()
-
-# Credits Logger
-print("[Emilia] Emilia Is Starting. | Spiral Tech Project | Licensed Under MIT.")
-plugins = dict(root="Emilia/anime")
-pyro_plugins = dict(root="Emilia/pyro")
-
-print("[INFO]: INITIALZING AIOHTTP SESSION")
-async def start_session():
-    global session
-    session = ClientSession()
-
-
-mongo = motor_asyncio.AsyncIOMotorClient(MONGO_DB_URL)
-db = mongo["Emilia"]
-
-
-async def create_indexes():
-    users_collection = db.chatlevels
-    userchat = db.users
-    chatuser = db.chats
-    floodmsg = db.flood_msgs
-    userchat_def = [
-        ("user_id", 1),
-        ("username", 1),
-        ("chats", 1),
-        ("first_found_date", 1),
-    ]
-    chatuser_def = [("chat_id", 1), ("chat_title", 1), ("first_found_date", 1)]
-    index_definition = [("points", -1), ("user_id", 1), ("chat_id", 1)]
-    floodmsg_def = [("chat_id", 1), ("user_id", 1), ("msg_id", 1)]
-    await users_collection.create_index(index_definition)
-    await userchat.create_index(userchat_def)
-    await chatuser.create_index(chatuser_def)
-    await floodmsg.create_index(floodmsg_def)
-
-
-DEV_USERS = list(DEV_USERS)
 
 TRIGGERS = ("/ !").split()
 ANILIST_CLIENT = 10061
@@ -147,12 +129,182 @@ TEMP_DOWNLOAD_DIRECTORY = Config.TEMP_DOWNLOAD_DIRECTORY
 WALL_API = Config.WALL_API
 BOT_ID = Config.BOT_ID
 BOT_NAME = Config.BOT_NAME
-ORIGINAL_EVENT_LOOP = Config.ORIGINAL_EVENT_LOOP
 
-uvloop.install() # Comment it if using Windows
-if ORIGINAL_EVENT_LOOP:
-    pgram = Client("pgram", api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, plugins=pyro_plugins, workers=32, sleep_threshold=0) # Set workers to 32 if you have a powerful server
+DEV_USERS.add(OWNER_ID)
+DEV_USERS = list(DEV_USERS)
+
+scheduler = AsyncIOScheduler()
+
+LOGGER.info("[Emilia] Emilia Is Starting. | Spiral Tech Project | Licensed Under MIT.")
+plugins = dict(root="Emilia/anime")
+pyro_plugins = dict(root="Emilia/pyro")
+
+mongo = motor_asyncio.AsyncIOMotorClient(MONGO_DB_URL)
+db = mongo["Emilia"]
+
+# Initialize clients
+if not IS_CLONE:
+    pgram = Client(name=SESSION_NAME, api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, workers=32, plugins=pyro_plugins, sleep_threshold=0)
 else:
-    pgram = Client("pgram", api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, plugins=pyro_plugins)
-telethn = TelegramClient("telethn", API_ID, API_HASH, flood_sleep_threshold=0).start(bot_token=TOKEN)
-anibot = Client("anibot", api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, sleep_threshold=0, plugins=plugins)
+    pgram = Client(name=SESSION_NAME, api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, plugins=pyro_plugins)
+
+anibot = Client(name=f"{SESSION_NAME}_anibot", api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, sleep_threshold=0, plugins=plugins)
+telethn = TelegramClient(f"{SESSION_NAME}_tele", API_ID, API_HASH).start(bot_token=TOKEN)
+
+
+async def create_indexes():
+    # Helper to ensure a unique index, replacing a conflicting non-unique one if present
+    async def ensure_unique(collection, keys, name=None):
+        name = name or "_".join([f"{k}_{d}" for k, d in keys])
+        try:
+            info = await collection.index_information()
+            if name in info and not info[name].get("unique"):
+                await collection.drop_index(name)
+        except Exception:
+            pass
+        try:
+            await collection.create_index(keys, name=name, unique=True)
+        except Exception:
+            # If it already exists with desired options, ignore
+            pass
+
+    # Collections
+    chatlevels = db.chatlevels
+    users = db.users
+    chats = db.chats
+    flood_msgs = db.flood_msgs
+
+    locks = db.locks
+    blocklists = db.blocklists
+    notes = db.notes
+    filters = db.filters
+    welcome = db.welcome
+    
+    warn_settings = db.warn_settings
+    user_warnings = db.user_warnings
+
+    afk = db.afk
+    nsfw = db.nsfw
+    pin = db.pin
+    reports = db.reports
+    disable = db.disable
+    connection = db.connection
+    user_info = db.user_info
+    karma = db.karma
+    nightmode = db.nightmode
+    rules = db.rules
+
+    feds = db.feds
+    fbans = db.fbans
+    fsubs = db.fsubs
+    fadmins = db.fadmins
+    logchannels = db.logchannels
+
+    # Extra collections referenced elsewhere
+    auth_users = db["AUTH_USERS"]
+    chatbotto = db.chatbotto
+    convodb = db.gemini_convos
+    antichannel = db.antichannel
+    vanitas = db.vanitas
+    ai = db.ai
+
+    # Anime-related singletons/collections
+    disabled_cmds = db["DISABLED_CMDS"]
+    connected_channels = db["CONNECTED_CHANNELS"]
+    group_ui = db["GROUP_UI"]
+    sfw_groups = db["SFW_GROUPS"]
+    subsplease_groups = db["SUBSPLEASE_GROUPS"]
+    mal_headlines_groups = db["MAL_HEADLINES_GROUPS"]
+
+    approve_d = db["approve_d"]
+
+    # Core/app data
+    await chatlevels.create_index([("points", -1), ("user_id", 1), ("chat_id", 1)])
+    # Common lookup by (user_id, chat_id)
+    await chatlevels.create_index([("user_id", 1), ("chat_id", 1)])
+    # Optimized per-chat leaderboard: filter by chat then sort by points
+    await chatlevels.create_index([("chat_id", 1), ("points", -1)])
+    # Enforce a single doc per (chat_id,user_id)
+    await ensure_unique(chatlevels, [("chat_id", 1), ("user_id", 1)], name="uniq_chat_user")
+
+    # Users and chats uniqueness
+    await ensure_unique(users, [("user_id", 1)], name="user_id_1")
+    await users.create_index([("username", 1)])
+    await users.create_index([("chats.chat_id", 1)])
+
+    await ensure_unique(chats, [("chat_id", 1)], name="chat_id_1")
+    await chats.create_index([("first_found_date", 1)])
+    await flood_msgs.create_index([("chat_id", 1), ("user_id", 1), ("msg_id", 1)])
+
+    # Features (single-doc-per-chat)
+    await ensure_unique(locks, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(blocklists, [("chat_id", 1)], name="chat_id_1")
+    # Efficient match/pull on nested array field
+    await blocklists.create_index([("blocklist_text.blocklist_text", 1)])
+
+    await ensure_unique(notes, [("chat_id", 1)], name="chat_id_1")
+    await notes.create_index([("notes.note_name", 1)])
+    # Compound multikey for efficient elemMatch lookups
+    await notes.create_index([("chat_id", 1), ("notes.note_name", 1)])
+
+    await ensure_unique(filters, [("chat_id", 1)], name="chat_id_1")
+    await filters.create_index([("filters.filter_name", 1)])
+    # Compound multikey for efficient elemMatch lookups
+    await filters.create_index([("chat_id", 1), ("filters.filter_name", 1)])
+
+    await ensure_unique(welcome, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(rules, [("chat_id", 1)], name="chat_id_1")
+
+    # Warnings
+    await ensure_unique(warn_settings, [("chat_id", 1)], name="chat_id_1")
+    await user_warnings.create_index([("chat_id", 1), ("user_id", 1)])
+    # Enforce uniqueness of warn id within a user in a chat
+    await ensure_unique(user_warnings, [("chat_id", 1), ("user_id", 1), ("warn_id", 1)], name="uniq_warn_triplet")
+
+    # Misc toggles/settings
+    await afk.create_index([("user_id", 1)])
+    await ensure_unique(nsfw, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(pin, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(reports, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(disable, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(connection, [("user_id", 1)], name="user_id_1")
+    await ensure_unique(user_info, [("user_id", 1)], name="user_id_1")
+    await karma.create_index([("chat_id_toggle", 1)])
+    await ensure_unique(nightmode, [("chat_id", 1)], name="chat_id_1")
+
+    # Federations
+    # Ensure single fed per fed_id and per owner
+    await ensure_unique(feds, [("fed_id", 1)], name="fed_id_1")
+    await ensure_unique(feds, [("owner_id", 1)], name="owner_id_1")
+    await feds.create_index([("chats", 1)])  # multikey for membership queries
+    await feds.create_index([("fedadmins", 1)])
+    # One fbans doc per fed
+    await ensure_unique(fbans, [("fed_id", 1)], name="fed_id_1")
+    # One fsubs doc per fed
+    await ensure_unique(fsubs, [("fed_id", 1)], name="fed_id_1")
+    # One fadmin profile per user
+    await ensure_unique(fadmins, [("user_id", 1)], name="user_id_1")
+
+    # Logs
+    await ensure_unique(logchannels, [("chat_id", 1)], name="chat_id_1")
+
+    # Third-party/auth & chatbot
+    await ensure_unique(auth_users, [("id", 1)], name="id_1")
+    await ensure_unique(chatbotto, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(convodb, [("user_id", 1)], name="user_id_1")
+    await ensure_unique(antichannel, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(vanitas, [("chat_id", 1)], name="chat_id_1")
+    await ensure_unique(ai, [("chat_id", 1)], name="chat_id_1")
+
+    # Anime singletons
+    await ensure_unique(disabled_cmds, [("_id", 1)], name="_id_1")
+    await ensure_unique(connected_channels, [("_id", 1)], name="_id_1")
+    await ensure_unique(group_ui, [("_id", 1)], name="_id_1")
+    await ensure_unique(sfw_groups, [("id", 1)], name="id_1")
+    await ensure_unique(subsplease_groups, [("_id", 1)], name="_id_1")
+    await ensure_unique(mal_headlines_groups, [("_id", 1)], name="_id_1")
+
+    # Approvals invariant: single record per (chat_id, user_id)
+    await ensure_unique(approve_d, [("chat_id", 1), ("user_id", 1)], name="uniq_approve_chat_user")
+
+    LOGGER.info("Database indexes created successfully.")

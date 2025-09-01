@@ -4,7 +4,7 @@ import random
 
 from telethon import events
 
-from Emilia import telethn, ORIGINAL_EVENT_LOOP
+from Emilia import telethn, IS_CLONE
 
 OWO = [
     "Emilia is always here for my Senpai >w<",
@@ -79,7 +79,7 @@ OWO = [
 
 @telethn.on(events.NewMessage(pattern="(?i)Emilia$"))
 async def Emi_(m: events.NewMessage):
-    if not ORIGINAL_EVENT_LOOP:
+    if IS_CLONE:
         return
     uwu = random.choice(OWO)
     await m.reply(uwu)

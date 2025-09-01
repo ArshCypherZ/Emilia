@@ -5,7 +5,7 @@ from asyncio import sleep
 
 import emoji
 from bs4 import BeautifulSoup
-from requests import get
+from Emilia.utils.async_http import get
 from telethon import Button
 from telethon.errors import FloodWaitError
 from telethon.errors.rpcerrorlist import PackShortNameOccupiedError
@@ -133,35 +133,3 @@ async def pck_kang__(e):
         ),
         parse_mode="html",
     )
-
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.63 Safari/537.36"
-}
-
-
-@usage("/stickers [query]")
-@description("Searches for stickers in combot.org")
-@example("/stickers pepe")
-@register(pattern="stickers", disable=True)
-@disable
-async def search_combot_stickers__(e):
-    if len(e.text.split(" ", 1)) == 2:
-        q = e.text.split(" ", 1)[1]
-    else:
-        return await usage_string(e, search_combot_stickers__)
-    url = "https://combot.org/telegram/stickers?q={}".format(q)
-    r = get(url, headers=headers)
-    soup = BeautifulSoup(r.content, "html.parser")
-    results = soup.find_all("a", {"class": "sticker-pack__btn"})
-    if not results:
-        return await e.reply("No results found :(")
-    titles = soup.find_all("div", "sticker-pack__title")
-    text = "Stickers for **{}**".format(q)
-    Q = 1
-    for x, y in zip(results, titles):
-        if Q == 7:
-            break
-        Q += 1
-        text += "\n• [{}]({})".format(y.get_text(), x["href"])
-    await e.reply(text)

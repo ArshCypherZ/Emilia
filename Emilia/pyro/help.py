@@ -6,8 +6,8 @@ from pyrogram.enums import ChatType
 from pyrogram.errors import BadRequest
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import BOT_USERNAME, custom_filter, pgram
-from Emilia.__main__ import HELPABLE, SUB_MODE
+from Emilia import BOT_USERNAME, custom_filter, pgram, LOGGER
+from Emilia.data import HELPABLE, SUB_MODE
 from Emilia.helper.disable import disable
 from Emilia.helper.pagination_buttons import paginate_modules
 from Emilia.utils.decorators import *
@@ -21,7 +21,8 @@ HELP_TEXT = """
 
 async def help_parser(client, chat_id, text, keyboard=None):
     if not keyboard:
-        keyboard = InlineKeyboardMarkup(paginate_modules(0, HELPABLE, "help"))
+        LOGGER.info("Helpable length when calling /help: {}".format(len(HELPABLE)))
+        keyboard = paginate_modules(0, HELPABLE, "help")
     await client.send_message(chat_id, text, reply_markup=keyboard)
 
 
@@ -56,6 +57,7 @@ async def help_command(client, message):
             await module_page(module_name, message)
         else:
             await help_parser(client, message.chat.id, HELP_TEXT)
+
 
 
 @Client.on_message(custom_filter.command("start"), group=9)
@@ -109,7 +111,7 @@ async def help_button(client, callback_query):
 
     elif back_match:
         try:
-            await callback_query.message.reply(text=HELP_TEXT, reply_markup=InlineKeyboardMarkup(paginate_modules(0, HELPABLE, "help")))
+            await callback_query.message.reply(text=HELP_TEXT, reply_markup=paginate_modules(0, HELPABLE, "help"))
             await callback_query.message.delete()
         except BadRequest:
             pass

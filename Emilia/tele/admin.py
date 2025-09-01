@@ -1,5 +1,3 @@
-# DONE: Admins
-
 import asyncio
 import os
 
@@ -38,6 +36,13 @@ from Emilia.helper.get_data import GetChat
 from Emilia.pyro.connection.connection import connection
 from Emilia.utils.decorators import *
 
+# Resolve the target chat to operate on. In PM, use connected chat if available.
+async def _target_chat_id(event):
+    if getattr(event, "is_private", False):
+        chat_id = await connection(event)
+        return chat_id
+    return event.chat_id
+
 BANNED_RIGHTS = ChatBannedRights(
     until_date=None,
     view_messages=True,
@@ -69,16 +74,32 @@ KICK_RIGHTS = ChatBannedRights(until_date=None, view_messages=True)
 @exception
 @logging
 async def promote(promt):
-    if not promt.is_group:
+    chat_id = await _target_chat_id(promt)
+    if promt.is_private and chat_id is None:
         return await promt.reply(strings.is_pvt)
     if not promt.from_id:
-        return await anonymous(promt, "promote")
+        admins = await get_anonymous_admins(promt, "promote")
+        if not admins:
+            return await promt.reply(
+                "I can't find any anonymous admin with required rights."
+            )
+        await promt.reply(
+            "This is an anonymous command. Please select which admin you are from the list below to use this command.",
+            buttons=[
+                Button.inline(
+                    f"{i.first_name}",
+                    data=f"check_{promt.chat_id}_{i.id}_promote",
+                )
+                for i in admins
+            ],
+        )
+        return
     users, title = await get_user_reason(promt)
     if not users:
         return await promt.reply(strings.nouser)
-    elif await is_admin(promt, users.id):
+    elif await is_admin(promt, users.id, chat_id=chat_id):
         return await promt.reply(strings.ON_ADMIN)
-    elif not await can_add_admins(promt, promt.sender_id):
+    elif not await can_add_admins(promt, promt.sender_id, chat_id=chat_id):
         return
     new_rights = ChatAdminRights(
         invite_users=True,
@@ -89,11 +110,11 @@ async def promote(promt):
     )
 
     (
-        await meow(EditAdminRequest(promt.chat_id, users.id, new_rights, "Admin"))
+        await meow(EditAdminRequest(chat_id, users.id, new_rights, "Admin"))
         if not title
-        else await meow(EditAdminRequest(promt.chat_id, users.id, new_rights, title))
+        else await meow(EditAdminRequest(chat_id, users.id, new_rights, title))
     )
-    await update_admin_cache(promt.chat_id, users.id, True)
+    await update_admin_cache(chat_id, users.id, True)
     await promt.reply(f"Promoted {users.first_name} Successfully!")
     return "PROMOTE", users.id, users.first_name
 
@@ -102,16 +123,32 @@ async def promote(promt):
 @exception
 @logging
 async def fpromote(promt):
-    if not promt.is_group:
+    chat_id = await _target_chat_id(promt)
+    if promt.is_private and chat_id is None:
         return await promt.reply(strings.is_pvt)
     if not promt.from_id:
-        return await anonymous(promt, "superpromote")
+        admins = await get_anonymous_admins(promt, "superpromote")
+        if not admins:
+            return await promt.reply(
+                "I can't find any anonymous admin with required rights."
+            )
+        await promt.reply(
+            "This is an anonymous command. Please select which admin you are from the list below to use this command.",
+            buttons=[
+                Button.inline(
+                    f"{i.first_name}",
+                    data=f"check_{promt.chat_id}_{i.id}_superpromote",
+                )
+                for i in admins
+            ],
+        )
+        return
     users, title = await get_user_reason(promt)
     if not users:
         return await promt.reply(strings.nouser)
-    elif await is_admin(promt, users.id):
+    elif await is_admin(promt, users.id, chat_id=chat_id):
         return await promt.reply(strings.ON_ADMIN)
-    elif not await can_add_admins(promt, promt.sender_id):
+    elif not await can_add_admins(promt, promt.sender_id, chat_id=chat_id):
         return
     new_rights = ChatAdminRights(
         add_admins=True,
@@ -123,11 +160,11 @@ async def fpromote(promt):
         manage_call=True,
     )
     (
-        await meow(EditAdminRequest(promt.chat_id, users.id, new_rights, "Admin"))
+        await meow(EditAdminRequest(chat_id, users.id, new_rights, "Admin"))
         if not title
-        else await meow(EditAdminRequest(promt.chat_id, users.id, new_rights, title))
+        else await meow(EditAdminRequest(chat_id, users.id, new_rights, title))
     )
-    await update_admin_cache(promt.chat_id, users.id, True)
+    await update_admin_cache(chat_id, users.id, True)
     await promt.reply(f"Promoted {users.first_name} with full rights successfully!")
     return "FULL_PROMOTE", users.id, users.first_name
 
@@ -141,7 +178,14 @@ async def admincach(event):
     else:
         chat_id = event.chat_id
 
-    m = await telethn.get_participants(chat_id, filter=ChannelParticipantsAdmins)
+    # Clear existing cache for this chat to avoid stale entries
+    try:
+        await cache_collection.delete_many({"chat_id": chat_id})
+    except Exception:
+        pass
+
+    # Fetch current admins and repopulate cache with accurate True flags
+    m = await meow.get_participants(chat_id, filter=ChannelParticipantsAdmins)
     for i in m:
         await update_admin_cache(chat_id, i.id, True)
     await event.reply("Admin cache refreshed!")
@@ -151,16 +195,32 @@ async def admincach(event):
 @exception
 @logging
 async def demote(dmod):
-    if not dmod.is_group:
+    chat_id = await _target_chat_id(dmod)
+    if dmod.is_private and chat_id is None:
         return await dmod.reply(strings.is_pvt)
     if not dmod.from_id:
-        return await anonymous(dmod, "demote")
+        admins = await get_anonymous_admins(dmod, "demote")
+        if not admins:
+            return await dmod.reply(
+                "I can't find any anonymous admin with required rights."
+            )
+        await dmod.reply(
+            "This is an anonymous command. Please select which admin you are from the list below to use this command.",
+            buttons=[
+                Button.inline(
+                    f"{i.first_name}",
+                    data=f"check_{dmod.chat_id}_{i.id}_demote",
+                )
+                for i in admins
+            ],
+        )
+        return
     users, _ = await get_user_reason(dmod)
     if not users:
         return await dmod.reply(strings.nouser)
-    elif not await is_admin(dmod, users.id):
+    elif not await is_admin(dmod, users.id, chat_id=chat_id):
         return await dmod.reply(strings.OFF_ADMIN)
-    elif not await can_add_admins(dmod, dmod.sender_id):
+    elif not await can_add_admins(dmod, dmod.sender_id, chat_id=chat_id):
         return
     newrights = ChatAdminRights(
         add_admins=None,
@@ -170,8 +230,8 @@ async def demote(dmod):
         delete_messages=None,
         pin_messages=None,
     )
-    await meow(EditAdminRequest(dmod.chat_id, users.id, newrights, "Admin"))
-    await update_admin_cache(dmod.chat_id, users.id, False)
+    await meow(EditAdminRequest(chat_id, users.id, newrights, "Admin"))
+    await update_admin_cache(chat_id, users.id, False)
     await dmod.reply(f"Demoted {users.first_name} Successfully!")
     return "DEMOTE", users.id, users.first_name
 
@@ -208,15 +268,75 @@ async def get_admin(show):
     await show.reply(mentions, parse_mode="html")
 
 
+async def get_anonymous_admins(event, type):
+    if type == "ban":
+        right = "ban_users"
+    elif type == "unban":
+        right = "ban_users"
+    elif type == "kick":
+        right = "ban_users"
+    elif type == "mute":
+        right = "ban_users"
+    elif type == "unmute":
+        right = "ban_users"
+    elif type == "promote":
+        right = "add_admins"
+    elif type == "superpromote":
+        right = "add_admins"
+    elif type == "demote":
+        right = "add_admins"
+    else:
+        return
+    info = await meow.get_entity(event.chat_id)
+    admins = await meow.get_participants(
+        info, filter=ChannelParticipantsAdmins, aggressive=True
+    )
+    to_return = []
+    for admin in admins:
+        if admin.participant.is_anonymous:
+            if getattr(admin.participant.admin_rights, right):
+                to_return.append(admin)
+    return to_return
+
+
+@inline(pattern=r"check_")
+async def check(event):
+    chat_id = int(event.pattern_match.group(1).decode("UTF-8").split("_")[1])
+    user_id = int(event.pattern_match.group(1).decode("UTF-8").split("_")[2])
+    type = event.pattern_match.group(1).decode("UTF-8").split("_")[3]
+    if event.sender_id != user_id:
+        return await event.answer("You are not the admin who initiated this command.")
+    message = await meow.get_messages(chat_id, ids=event.message_id)
+    message.from_id = user_id
+    if type == "ban":
+        await ban(message)
+    elif type == "unban":
+        await unban(message)
+    elif type == "kick":
+        await kick(message)
+    elif type == "mute":
+        await mute(message)
+    elif type == "unmute":
+        await unmute(message)
+    elif type == "promote":
+        await promote(message)
+    elif type == "superpromote":
+        await fpromote(message)
+    elif type == "demote":
+        await demote(message)
+    await event.delete()
+
+
 @register(pattern="setgpic")
 @exception
 @logging
 async def set_group_photo(gpic):
     replymsg = await gpic.get_reply_message()
     photo = None
-    if not gpic.is_group:
+    chat_id = await _target_chat_id(gpic)
+    if gpic.is_private and chat_id is None:
         return await gpic.reply(strings.is_pvt)
-    if not await can_change_info(gpic, gpic.sender_id):
+    if not await can_change_info(gpic, gpic.sender_id, chat_id=chat_id):
         return
     elif not replymsg:
         return await gpic.reply(strings.media)
@@ -228,7 +348,7 @@ async def set_group_photo(gpic):
         else:
             await gpic.reply(strings.imedia)
     if photo:
-        await meow(EditPhotoRequest(gpic.chat_id, await meow.upload_file(photo)))
+        await meow(EditPhotoRequest(chat_id, await meow.upload_file(photo)))
         os.remove(photo)
         await gpic.reply("Successfully changed group profile photo.")
         return "NEW_GPIC", None, None
@@ -239,19 +359,20 @@ async def set_group_photo(gpic):
 @logging
 async def settitle(promt):
     user, title_admin = await get_user_reason(promt)
-    if not promt.is_group:
+    chat_id = await _target_chat_id(promt)
+    if promt.is_private and chat_id is None:
         return await promt.reply(strings.is_pvt)
-    elif not await can_add_admins(promt, promt.sender_id):
+    elif not await can_add_admins(promt, promt.sender_id, chat_id=chat_id):
         return
     elif not user:
         return await promt.reply("Reply to a user to set his title.")
     elif not title_admin:
         return await promt.reply("Give a title to set.")
-    elif not await is_admin(promt, user.id):
+    elif not await is_admin(promt, user.id, chat_id=chat_id):
         return await promt.reply(strings.OFF_ADMIN)
     result = await meow(
         GetParticipantRequest(
-            channel=promt.chat_id,
+            channel=chat_id,
             participant=user.id,
         )
     )
@@ -259,7 +380,7 @@ async def settitle(promt):
 
     await meow(
         EditAdminRequest(
-            promt.chat_id,
+            chat_id,
             user_id=user.id,
             admin_rights=p.admin_rights,
             rank=title_admin,
@@ -417,21 +538,22 @@ async def _(event):
 @logging
 async def set_group_title(gpic):
     input_str = gpic.pattern_match.group(1)
-    if not gpic.is_group:
+    chat_id = await _target_chat_id(gpic)
+    if gpic.is_private and chat_id is None:
         return await gpic.reply(strings.is_pvt)
     if not input_str:
         return await gpic.reply("Please give me a title to set.")
     if len(input_str) > 255:
         return await gpic.reply("Title is too long.")
-    elif not await can_change_info(gpic, gpic.sender_id):
+    elif not await can_change_info(gpic, gpic.sender_id, chat_id=chat_id):
         return
     try:
-        await meow(EditChatTitleRequest(chat_id=gpic.chat_id, title=input_str))
+        await meow(EditChatTitleRequest(chat_id=chat_id, title=input_str))
         await gpic.reply(f"Group name updated successfully to {input_str}.")
     except ChatAdminRequiredError:
         await gpic.reply(strings.botinfo)
     except BaseException:
-        await meow(EditTitleRequest(channel=gpic.chat_id, title=input_str))
+        await meow(EditTitleRequest(channel=chat_id, title=input_str))
         await gpic.reply(f"Group name updated successfully to {input_str}.")
     return "NEW_GTITLE", None, None
 
@@ -441,13 +563,14 @@ async def set_group_title(gpic):
 @exception
 async def set_group_des(gpic):
     input_str = gpic.pattern_match.group(1)
-    if not gpic.is_group:
+    chat_id = await _target_chat_id(gpic)
+    if gpic.is_private and chat_id is None:
         return await gpic.reply(strings.is_pvt)
     if not input_str:
         return await gpic.reply("Please give me a description to set.")
-    elif not await can_change_info(gpic, gpic.sender_id):
+    elif not await can_change_info(gpic, gpic.sender_id, chat_id=chat_id):
         return
-    await meow(EditChatAboutRequest(peer=gpic.chat_id, about=input_str))
+    await meow(EditChatAboutRequest(peer=chat_id, about=input_str))
     await gpic.reply("Successfully set new group description.")
     return "NEW_GDESC", None, None
 
@@ -521,7 +644,6 @@ async def purge_to(event):
         if messages:
             await event.client.delete_messages(event.chat_id, messages)
         m = await event.respond("**Purged Completed!**")
-        await asyncio.sleep(3)
         await m.delete()
 
     except Exception as e:
@@ -557,7 +679,6 @@ async def purge(event):
     await event.client.delete_messages(chat, msgs)
     time_ = time.perf_counter() - start
     m = await event.respond(f"Purged {count} Messages In {time_:0.2f} Secs.")
-    await asyncio.sleep(3)
     await m.delete()
 
 

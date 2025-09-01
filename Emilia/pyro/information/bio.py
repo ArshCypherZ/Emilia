@@ -13,6 +13,7 @@ from Emilia.mongo.karma_mongo import user_global_karma
 from Emilia.mongo.user_info import *
 from Emilia.pyro.connection.connection import connection
 from Emilia.utils.decorators import *
+from Emilia.utils.auth import is_owner, is_dev
 
 db_ = db.users
 
@@ -192,10 +193,10 @@ async def _info(_, message):
         except BadRequest:
             pass
 
-    if user_id == OWNER_ID:
+    if is_owner(user_id):
         text += "\n\nHe is my cute neko Arshhhhhhhhh <3"
 
-    elif user_id in DEV_USERS:
+    elif is_dev(user_id):
         text += "\n\nOne of my developers, respect ++"
 
     if await banned(user_id):

@@ -6,7 +6,7 @@ from telethon import events
 
 from Emilia import BOT_USERNAME, DEV_USERS, telethn
 
-DISABLE_COMMANDS = []  # Keep the DISABLE_COMMANDS variable.
+DISABLE_COMMANDS = []
 
 
 def command_lister(commands: Union[str, List[str]], disable: bool = False) -> list:
@@ -64,11 +64,6 @@ def command(
                 if not re.match(pattern.format(re.escape(cmd)), without_prefix):
                     continue
 
-                # match.groups are 1-indexed, group(1) is the quote, group(2) is the text
-                # between the quotes, group(3) is unquoted, whitespace-split
-                # text
-
-                # Remove the escape character from the arguments
                 message.command = [cmd] + [
                     re.sub(r"\\([\"'])", r"\1", m.group(2) or m.group(3) or "")
                     for m in command_re.finditer(without_prefix[len(cmd) :])
@@ -118,7 +113,6 @@ def callbackquery(**args):
 
 def auth(**args):
     command_pattern = args.get("pattern")
-
     args["pattern"] = r"(?i)^(?:/|!)(?:{})\s?(?:@Elf_Robot)?(?:\s|$)([\s\S]*)$".format(
         command_pattern
     )

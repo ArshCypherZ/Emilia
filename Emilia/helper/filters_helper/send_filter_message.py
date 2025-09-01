@@ -8,7 +8,7 @@ from Emilia.helper.note_helper.note_fillings import NoteFillings
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
 from Emilia.utils.decorators import rate_limit
 
-@rate_limit(10, 60)
+@rate_limit(5, 60)
 async def SendFilterMessage(
     client, message: Message, filter_name: str, content: str, text: str, data_type: int
 ):

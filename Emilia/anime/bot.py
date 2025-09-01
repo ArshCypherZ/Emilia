@@ -7,7 +7,7 @@ import sys
 import traceback
 from datetime import datetime
 
-import requests
+from Emilia.utils.async_http import get
 from bson.objectid import ObjectId
 from natsort import natsorted
 from pyrogram import Client, enums, filters
@@ -23,7 +23,7 @@ from pyrogram.types import (
     Message,
 )
 
-from Emilia import BOT_USERNAME, DEV_USERS, HELP_DICT
+from Emilia import BOT_USERNAME, DEV_USERS, HELP_DICT, LOGGER
 from Emilia import TRIGGERS as trg
 from Emilia import anibot, custom_filter
 from Emilia.anime.anilist import auth_link_cmd, code_cmd, logout_cmd
@@ -36,7 +36,6 @@ GROUPS = get_collection("GROUPS")
 SFW_GROUPS = get_collection("SFW_GROUPS")
 DC = get_collection("DISABLED_CMDS")
 AG = get_collection("AIRING_GROUPS")
-CR_GRPS = get_collection("CRUNCHY_GROUPS")
 HD_GRPS = get_collection("HEADLINES_GROUPS")
 MAL_HD_GRPS = get_collection("MAL_HEADLINES_GROUPS")
 SP_GRPS = get_collection("SUBSPLEASE_GROUPS")
@@ -104,7 +103,8 @@ async def en_dis__able_cmd(client: Client, message: Message, mdata: dict):
                     await asyncio.sleep(5)
                     await x.delete()
                     return
-                await DC.insert_one({"_id": gid, "cmd_list": cmd[1]})
+                # Idempotent create of disabled command list
+                await DC.update_one({"_id": gid}, {"$setOnInsert": {"cmd_list": cmd[1]}}, upsert=True)
                 x = await message.reply_text("Command disabled!!!")
                 await asyncio.sleep(5)
                 await x.delete()
@@ -194,7 +194,6 @@ async def db_cleanup(client: Client, message: Message, mdata: dict):
             await AG.find_one_and_delete({"_id": i["_id"]})
             await HD_GRPS.find_one_and_delete({"_id": i["_id"]})
             await SP_GRPS.find_one_and_delete({"_id": i["_id"]})
-            await CR_GRPS.find_one_and_delete({"_id": i["_id"]})
         except fw:
             await asyncio.sleep(fw.x + 5)
     await asyncio.sleep(5)
@@ -347,7 +346,8 @@ async def connect_(client: Client, message: Message, mdata: dict):
                     ),
                 )
                 return
-            await CC.insert_one({"_id": str(channel), "usr": id_})
+            # Idempotent connect
+            await CC.update_one({"_id": str(channel)}, {"$setOnInsert": {"usr": id_}}, upsert=True)
             await client.send_message(gid, text="Successfully connected the channel")
         else:
             k = await CC.find_one({"_id": str(channel)})
@@ -362,7 +362,8 @@ async def connect_(client: Client, message: Message, mdata: dict):
         k = (await client.get_chat_member(gid, id_)).status
         if k == CHAT_DEV_USERS:
             if "aniconnect" in mdata["text"]:
-                await CC.insert_one({"_id": str(message.chat.id), "usr": id_})
+                # Idempotent connect (group context)
+                await CC.update_one({"_id": str(message.chat.id)}, {"$setOnInsert": {"usr": id_}}, upsert=True)
                 await client.send_message(
                     gid, text="Successfully connected the channel"
                 )
@@ -437,12 +438,10 @@ async def stats_(client: Client, message: Message, mdata: dict):
     nosauus = await AUTH_USERS.estimated_document_count()
     nosgrps = await GROUPS.estimated_document_count()
     nossgrps = await SFW_GROUPS.estimated_document_count()
-    noshdgrps = await HD_GRPS.estimated_document_count()
     nosmhdgrps = await MAL_HD_GRPS.estimated_document_count()
     s = await SP_GRPS.estimated_document_count()
-    a = await AG.estimated_document_count()
-    c = await CR_GRPS.estimated_document_count()
-    kk = requests.get("https://api.github.com/repos/lostb053/anibot").json()
+    kk_response = await get("https://api.github.com/repos/lostb053/anibot")
+    kk = kk_response.json()
     await x.edit_text(
         f"""
 Stats:-
@@ -450,10 +449,7 @@ Stats:-
 **Users:** {nosus}
 **Authorised Users:** {nosauus}
 **Groups:** {nosgrps}
-**Airing Groups:** {a}
-**Crunchyroll Groups:** {c}
 **Subsplease Groups:** {s}
-**LC Headline Groups:** {noshdgrps}
 **MAL Headline Groups:** {nosmhdgrps}
 **SFW Groups:** {nossgrps}
 **Stargazers:** {kk.get("stargazers_count")}
@@ -558,11 +554,17 @@ async def terminal(client: Client, message: Message, mdata: dict):
         for x in code:
             shell = re.split(""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", x)
             try:
-                process = subprocess.Popen(
-                    shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                # Use async subprocess instead of blocking subprocess.Popen
+                process = await asyncio.create_subprocess_exec(
+                    *shell, 
+                    stdout=asyncio.subprocess.PIPE, 
+                    stderr=asyncio.subprocess.PIPE
                 )
+                stdout, stderr = await process.communicate()
+                if stderr:
+                    raise Exception(stderr.decode())
             except Exception as err:
-                print(err)
+                LOGGER.error(err)
                 await message.reply_text(
                     """
 **Error:**
@@ -573,16 +575,30 @@ async def terminal(client: Client, message: Message, mdata: dict):
                     parse_mode=enums.ParseMode.MARKDOWN,
                 )
             output += "**{}**\n".format(code)
-            output += process.stdout.read()[:-1].decode("utf-8")
+            output += stdout.decode("utf-8").rstrip()
             output += "\n"
     else:
         shell = re.split(""" (?=(?:[^'"]|'[^']*'|"[^"]*")*$)""", teks)
         for a in range(len(shell)):
             shell[a] = shell[a].replace('"', "")
         try:
-            process = subprocess.Popen(
-                shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            # Use async subprocess instead of blocking subprocess.Popen
+            process = await asyncio.create_subprocess_exec(
+                *shell, 
+                stdout=asyncio.subprocess.PIPE, 
+                stderr=asyncio.subprocess.PIPE
             )
+            stdout, stderr = await process.communicate()
+            if stderr:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                errors = traceback.format_exception(
+                    etype=exc_type, value=exc_obj, tb=exc_tb
+                )
+                await message.reply_text(
+                    """**Error:**\n```{}```""".format("".join(errors)),
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                )
+                return
         except Exception:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             errors = traceback.format_exception(
@@ -593,7 +609,7 @@ async def terminal(client: Client, message: Message, mdata: dict):
                 parse_mode=enums.ParseMode.MARKDOWN,
             )
             return
-        output = process.stdout.read()[:-1].decode("utf-8")
+        output = stdout.decode("utf-8").rstrip()
     if str(output) == "\n":
         output = None
     if output:

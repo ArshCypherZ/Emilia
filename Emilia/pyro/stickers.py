@@ -24,7 +24,7 @@ from pyrogram.raw.types import (
 )
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import EVENT_LOGS as LOG_CHANNEL, BOT_USERNAME
+from Emilia import EVENT_LOGS as LOG_CHANNEL, BOT_USERNAME, LOGGER
 from Emilia import custom_filter, pgram
 from Emilia.helper.disable import disable
 from Emilia.helper.http import http
@@ -109,7 +109,6 @@ async def _vidstick0(_, message):
     if replied and replied.animation:
         file_id = replied.animation.file_id
         new_file = await _.download_media(file_id, file_name="video.mp4")
-        print(new_file)
         await _.send_video(chat_id, video=open(new_file, "rb"))
         os.remove(new_file)
     else:
@@ -367,7 +366,7 @@ async def kang_sticker(c, m):
                 )
 
     except BadRequest as e:
-        print(e)
+        LOGGER.error(e)
         return await m.reply(
             "Your Sticker Pack is full if your pack is not in v1 Type /kang 1, if it is not in v2 Type /kang 2 and so on."
         )
@@ -414,7 +413,6 @@ async def convert_video(input):
     height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
     width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
 
-    # check height and width to scale
     if width > height:
         width = 512
         height = -1

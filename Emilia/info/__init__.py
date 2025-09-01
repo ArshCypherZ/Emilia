@@ -1,17 +1,12 @@
 import os
 from os.path import basename, dirname, isfile
-
 from Emilia import LOGGER
 
 
 def getListOfFiles(dirName):
-    # create a list of file and sub directories
-    # names in the given directory
     listOfFile = os.listdir(dirName)
     allFiles = list()
-    # Iterate over all the entries
     for entry in listOfFile:
-        # Create full path
         fullPath = os.path.join(dirName, entry)
         if "__pycache__" not in fullPath:
             if os.path.isdir(fullPath):
@@ -22,7 +17,6 @@ def getListOfFiles(dirName):
     return allFiles
 
 
-LOGGER.error(__file__)
 mod_paths = getListOfFiles(dirName=dirname(__file__)) + getListOfFiles(
     dirName=dirname(os.getcwd() + "/Emilia/tele/__init__.py")
 )
@@ -39,6 +33,6 @@ module_names = [
     if isfile(f) and f.endswith(".py") and not f.endswith("__init__.py")
 ]
 
-print(("INFO - " f"{', '.join(module_names)} - MODULES LOADED"))
+LOGGER.error(("INFO - " f"{', '.join(module_names)} - MODULES LOADED"))
 ALL_MODULES = sorted(all_modules)
 __all__ = ALL_MODULES + ["ALL_MODULES"]

@@ -7,9 +7,35 @@ from Emilia import db
 from Emilia.helper.chat_status import isBotAdmin, isUserAdmin
 from Emilia.mongo.blocklists_mongo import get_blocklist
 from Emilia.pyro.blocklists.checker import blocklist_action
+from Emilia.utils.cache import SimpleCache, approvals_cache
 
 collection = db["approve_d"]
 
+# Precompile regex and reuse URL extractor
+_WORD_BOUNDARY = r"( |^|[^\w])"
+URL_EXTRACTOR = URLExtract()
+
+# Small caches
+_blocklist_cache = SimpleCache(default_ttl=180)
+
+async def _get_blocklist_cached(chat_id: int):
+    k = f"bl:{chat_id}"
+    v = _blocklist_cache.get(k)
+    if v is not None:
+        return v
+    data = await get_blocklist(chat_id)
+    data = data or []
+    _blocklist_cache.set(k, data, ttl=180)
+    return data
+
+async def _is_approved_cached(chat_id: int, user_id: int) -> bool:
+    key = f"appr:{chat_id}:{user_id}"
+    val = approvals_cache.get(key)
+    if val is not None:
+        return val
+    is_approved = await collection.find_one({"user_id": user_id, "chat_id": chat_id}) is not None
+    approvals_cache.set(key, is_approved, ttl=180)
+    return is_approved
 
 @Client.on_message(filters.all & filters.group, group=3)
 async def blocklist_checker(client, message):
@@ -25,38 +51,31 @@ async def blocklist_checker(client, message):
     except BaseException:
         pass
 
-    if message.sender_chat:
-        user_id = message.sender_chat.id
+    user_id = message.sender_chat.id if message.sender_chat else message.from_user.id
 
-    else:
-        user_id = message.from_user.id
-
-    if await collection.find_one({"user_id": user_id, "chat_id": chat_id}):
+    if await _is_approved_cached(chat_id, user_id):
         return
 
-    BLOCKLIST_DATA = await get_blocklist(chat_id)
-    if BLOCKLIST_DATA is None or len(BLOCKLIST_DATA) == 0:
+    BLOCKLIST_DATA = await _get_blocklist_cached(chat_id)
+    if not BLOCKLIST_DATA:
         return
 
-    BLOCKLIST_ITMES = []
-    for blocklist_array in BLOCKLIST_DATA:
-        BLOCKLIST_ITMES.append(blocklist_array["blocklist_text"])
+    BLOCKLIST_ITMES = [b["blocklist_text"] for b in BLOCKLIST_DATA]
 
     message_text = extract_text(message)
 
     for blitmes in BLOCKLIST_ITMES:
         if "*" in blitmes:
             star_position = blitmes.index("*")
-            if blitmes[star_position - 1] == "/":
+            if star_position > 0 and blitmes[star_position - 1] == "/":
                 block_char = blitmes[:star_position]
-                extractor = URLExtract()
-                URLS = extractor.find_urls(message_text)
+                URLS = URL_EXTRACTOR.find_urls(message_text or "")
                 for url in URLS:
                     if block_char in url:
                         await blocklist_action(client, message, f"{block_char}*")
                         return
 
-            elif len(blitmes) > len(blitmes) and blitmes[star_position + 1] == ".":
+            elif star_position + 1 < len(blitmes) and blitmes[star_position + 1] == ".":
                 if message.document or message.animation:
                     extensions = blitmes[star_position + 1 :]
                     file_name = None
@@ -64,12 +83,12 @@ async def blocklist_checker(client, message):
                         file_name = message.document.file_name
                     elif message.animation:
                         file_name = message.animation.file_name
-                    if file_name.endswith(extensions):
+                    if file_name and file_name.endswith(extensions):
                         await blocklist_action(client, message, f"*{extensions}")
                         return
         else:
-            if message_text is not None:
-                pattern = r"( |^|[^\w])" + re.escape(blitmes) + r"( |$|[^\w])"
+            if message_text:
+                pattern = _WORD_BOUNDARY + re.escape(blitmes) + _WORD_BOUNDARY
                 if re.search(pattern, message_text, flags=re.IGNORECASE):
                     await blocklist_action(client, message, blitmes)
                     return

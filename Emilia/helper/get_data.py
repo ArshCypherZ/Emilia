@@ -1,4 +1,4 @@
-from emojis import decode
+from emoji import demojize
 from pyrogram.types import Message
 
 from Emilia import pgram
@@ -36,7 +36,8 @@ async def get_text_reason(message: Message) -> str:
     Returns:
         [str]: text, reason
     """
-    text = decode(message.text)
+    # demojize keeps text stable and is lightweight
+    text = demojize(message.text)
     index_finder = [x for x in range(len(text)) if text[x] == '"']
     if len(index_finder) >= 2:
         text1 = text[index_finder[0] + 1 : index_finder[1]]

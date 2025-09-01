@@ -1,4 +1,7 @@
+from typing import Optional, Dict, Any
 from Emilia import db
+from Emilia.utils.db import find_one as db_find_one, find as db_find
+from Emilia.utils.constants import normalize_filter
 
 feds = db.feds
 fbans = db.fbans
@@ -46,43 +49,23 @@ async def rename_fed(fed_id, fname):
 
 
 async def chat_join_fed(fed_id, chat_id: int):
-    _fed = await feds.find_one({"fed_id": fed_id})
-    if _fed:
-        chats = _fed["chats"]
-        chats.append(chat_id)
-        await feds.update_one(
-            {"fed_id": fed_id}, {"$set": {"chats": chats}}, upsert=True
-        )
+    # Atomic add to set to avoid duplicates
+    await feds.update_one({"fed_id": fed_id}, {"$addToSet": {"chats": chat_id}}, upsert=True)
 
 
 async def user_demote_fed(fed_id, user_id: int):
-    _fed = await feds.find_one({"fed_id": fed_id})
-    if _fed:
-        fedadmins = _fed["fedadmins"]
-        fedadmins.remove(user_id)
-        await feds.update_one(
-            {"fed_id": fed_id}, {"$set": {"fedadmins": fedadmins}}, upsert=True
-        )
+    # Atomic pull
+    await feds.update_one({"fed_id": fed_id}, {"$pull": {"fedadmins": user_id}}, upsert=True)
 
 
 async def user_join_fed(fed_id, user_id: int):
-    _fed = await feds.find_one({"fed_id": fed_id})
-    if _fed:
-        fedadmins = _fed["fedadmins"]
-        fedadmins.append(user_id)
-        await feds.update_one(
-            {"fed_id": fed_id}, {"$set": {"fedadmins": fedadmins}}, upsert=True
-        )
+    # Atomic add to set
+    await feds.update_one({"fed_id": fed_id}, {"$addToSet": {"fedadmins": user_id}}, upsert=True)
 
 
 async def chat_leave_fed(fed_id, chat_id):
-    _fed = await feds.find_one({"fed_id": fed_id})
-    if _fed:
-        chats = _fed["chats"]
-        chats.remove(chat_id)
-        await feds.update_one(
-            {"fed_id": fed_id}, {"$set": {"chats": chats}}, upsert=True
-        )
+    # Atomic pull
+    await feds.update_one({"fed_id": fed_id}, {"$pull": {"chats": chat_id}}, upsert=True)
 
 
 async def get_fed_reason(fed_id):
@@ -97,24 +80,22 @@ async def set_fed_reason(fed_id, mode):
 
 
 async def fban_user(fed_id, user_id: str, firstname, lastname, reason, time: str):
-    _fban = await fbans.find_one({"fed_id": fed_id})
-    if _fban:
-        f_bans = _fban["fbans"]
-    else:
-        f_bans = {}
-    f_bans[str(user_id)] = [firstname, lastname, reason, time]
-    await fbans.update_one({"fed_id": fed_id}, {"$set": {"fbans": f_bans}}, upsert=True)
+    uid = str(user_id)
+    entry = [firstname, lastname, reason, time]
+    await fbans.update_one(
+        {"fed_id": fed_id},
+        {"$set": {f"fbans.{uid}": entry}, "$setOnInsert": {"fed_id": fed_id}},
+        upsert=True,
+    )
 
 
 async def unfban_user(fed_id, user_id):
-    _fban = await fbans.find_one({"fed_id": fed_id})
-    if _fban:
-        f_bans = _fban["fbans"]
-    else:
-        f_bans = {}
-    if f_bans[str(user_id)]:
-        del f_bans[str(user_id)]
-    await fbans.update_one({"fed_id": fed_id}, {"$set": {"fbans": f_bans}}, upsert=True)
+    uid = str(user_id)
+    await fbans.update_one(
+        {"fed_id": fed_id},
+        {"$unset": {f"fbans.{uid}": ""}, "$setOnInsert": {"fed_id": fed_id, "fbans": {}}},
+        upsert=True,
+    )
 
 
 async def get_user_owner_fed_full(owner_id):
@@ -125,35 +106,33 @@ async def get_user_owner_fed_full(owner_id):
 
 
 async def search_fed_by_id(fed_id):
-    _x_fed = await feds.find_one({"fed_id": fed_id})
+    # guard mixed types (string/int) for fed_id via normalizer
+    _x_fed = await db_find_one("feds", {"fed_id": fed_id})
     if _x_fed:
         return _x_fed
     return None
 
 
 async def get_len_fbans(fed_id):
-    _x_fbans = await fbans.find_one({"fed_id": fed_id})
+    _x_fbans = await db_find_one("fbans", {"fed_id": fed_id})
     if _x_fbans:
-        return len(_x_fbans.get("fbans"))
+        return len(_x_fbans.get("fbans") or {})
     return 0
 
 
 async def get_all_fbans(fed_id):
-    _x_fbans = await fbans.find_one({"fed_id": fed_id})
+    _x_fbans = await db_find_one("fbans", {"fed_id": fed_id})
     if _x_fbans:
         return _x_fbans.get("fbans")
     return None
 
 
-async def get_chat_fed(chat_id):
-    _x = feds.find({})
-    async for x in _x:
-        if "chats" in x:
-            if chat_id in x["chats"]:
-                return_able = x["fed_id"]
-                if len(return_able) == 0:
-                    return None
-                return return_able
+async def get_chat_fed(chat_id: int) -> Optional[str]:
+    # Replace collection scan with indexed array membership query
+    # Ensure: index on feds.chats as sparse/multikey on int values
+    doc = await feds.find_one({"chats": normalize_filter({"chat_id": chat_id}).get("chat_id")}, {"fed_id": 1})
+    if doc and doc.get("fed_id"):
+        return doc["fed_id"] or None
     return None
 
 
@@ -169,7 +148,7 @@ async def get_fban_user(fed_id, user_id: str):
 
 
 async def search_user_in_fed(fed_id, user_id: int):
-    _x = await feds.find_one({"fed_id": fed_id})
+    _x = await db_find_one("feds", {"fed_id": fed_id})
     if _x:
         _admins = _x.get("fedadmins")
         if _admins and len(_admins) > 0:
@@ -179,7 +158,7 @@ async def search_user_in_fed(fed_id, user_id: int):
 
 
 async def user_feds_report(user_id: int):
-    _x = await feds.find_one({"owner_id": user_id})
+    _x = await feds.find_one({"owner_id": user_id}, {"report": 1})
     if _x:
         return _x["report"]
     return True
@@ -193,9 +172,12 @@ async def set_feds_setting(user_id: int, mode):
 
 async def get_all_fed_admins(fed_id):
     _fed = await feds.find_one({"fed_id": fed_id})
-    x_admins = _fed["fedadmins"]
-    x_owner = _fed["owner_id"]
-    x_admins.append(x_owner)
+    if not _fed:
+        return []
+    x_admins = list(set(_fed.get("fedadmins") or []))
+    x_owner = _fed.get("owner_id")
+    if x_owner is not None and x_owner not in x_admins:
+        x_admins.append(x_owner)
     return x_admins
 
 
@@ -208,30 +190,12 @@ async def get_fed_log(fed_id):
 
 async def get_all_fed_chats(fed_id):
     _fed = await feds.find_one({"fed_id": fed_id})
-    return _fed.get("chats")
+    return _fed.get("chats") if _fed else []
 
 
 async def sub_fed(fed_id: str, my_fed: str):
-    x_mysubs = await fsubs.find_one({"fed_id": my_fed})
-    if x_mysubs:
-        my_subs = x_mysubs["my_subs"]
-    else:
-        my_subs = []
-    my_subs.append(fed_id)
-    my_subs = list(set(my_subs))
-    await fsubs.update_one(
-        {"fed_id": my_fed}, {"$set": {"my_subs": my_subs}}, upsert=True
-    )
-    x_fedsubs = await fsubs.find_one({"fed_id": fed_id})
-    if x_fedsubs:
-        fed_subs = x_fedsubs["fed_subs"]
-    else:
-        fed_subs = []
-    fed_subs.append(my_fed)
-    fed_subs = list(set(fed_subs))
-    await fsubs.update_one(
-        {"fed_id": fed_id}, {"$set": {"fed_subs": fed_subs}}, upsert=True
-    )
+    await fsubs.update_one({"fed_id": my_fed}, {"$addToSet": {"my_subs": fed_id}}, upsert=True)
+    await fsubs.update_one({"fed_id": fed_id}, {"$addToSet": {"fed_subs": my_fed}}, upsert=True)
 
 
 async def get_all_subscribed_feds(fed_id):
@@ -242,26 +206,8 @@ async def get_all_subscribed_feds(fed_id):
 
 
 async def unsub_fed(fed_id: str, my_fed: str):
-    x_mysubs = await fsubs.find_one({"fed_id": my_fed})
-    if x_mysubs:
-        my_subs = x_mysubs["my_subs"]
-    else:
-        my_subs = []
-    if fed_id in my_subs:
-        my_subs.remove(fed_id)
-    await fsubs.update_one(
-        {"fed_id": my_fed}, {"$set": {"my_subs": my_subs}}, upsert=True
-    )
-    x_fedsubs = await fsubs.find_one({"fed_id": fed_id})
-    if x_fedsubs:
-        fed_subs = x_fedsubs["fed_subs"]
-    else:
-        fed_subs = []
-    if my_fed in fed_subs:
-        fed_subs.remove(my_fed)
-    await fsubs.update_one(
-        {"fed_id": fed_id}, {"$set": {"fed_subs": fed_subs}}, upsert=True
-    )
+    await fsubs.update_one({"fed_id": my_fed}, {"$pull": {"my_subs": fed_id}}, upsert=True)
+    await fsubs.update_one({"fed_id": fed_id}, {"$pull": {"fed_subs": my_fed}}, upsert=True)
 
 
 async def get_my_subs(fed_id):
@@ -295,11 +241,26 @@ async def set_fed_log(fed_id: str, chat_id=None):
     await feds.update_one({"fed_id": fed_id}, {"$set": {"flog": chat_id}}, upsert=True)
 
 
+async def quietfed(chat_id=None, argument: bool = False):
+    """Enable/disable quietfed per-chat.
+
+    Compatible with both quietfed(chat_id, bool) and quietfed({"chat_id": id, "quiet": bool})
+    call sites.
+    """
+    if isinstance(chat_id, dict):
+        payload = chat_id
+        chat_id = payload.get("chat_id")
+        argument = bool(payload.get("quiet", argument))
+    await feds.update_one(
+        {"chat_id": chat_id}, {"$set": {"quiet": argument}}, upsert=True
+    )
+
+
 async def get_all_fed_admin_feds(user_id):
     admin = []
     fed = {}
-    for x in await feds.find():
-        if user_id in x.get("fedadmins"):
+    async for x in feds.find({}, {"fedadmins": 1, "fed_id": 1, "owner_id": 1}):
+        if user_id in (x.get("fedadmins") or []):
             admin.append(x.get("fed_id"))
     owner = await feds.find_one({"owner_id": user_id})
     if owner:
@@ -311,8 +272,8 @@ async def get_all_fed_admin_feds(user_id):
 
 async def get_all_fed_admin(user_id):
     admin = []
-    for x in await feds.find():
-        if user_id in x.get("fedadmins"):
+    async for x in feds.find({}, {"fedadmins": 1, "fed_id": 1}):
+        if user_id in (x.get("fedadmins") or []):
             admin.append(x.get("fed_id"))
 
     return admin
@@ -323,9 +284,3 @@ async def get_fed_name(fed_id):
     if _fed:
         return _fed.get("fedname")
     return None
-
-
-async def quietfed(chat_id=None, argument: bool = False):
-    await feds.update_one(
-        {"chat_id": chat_id}, {"$set": {"quiet": argument}}, upsert=True
-    )

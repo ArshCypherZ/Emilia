@@ -43,10 +43,12 @@ async def appr(event):
             return await event.reply(strings.nouser)
         if await is_admin(event, user.id, pm_mode=True):
             return await event.reply(strings.ON_ADMIN)
-        if not await approve_d.find_one({"user_id": int(user.id), "chat_id": chat_id}):
-            await approve_d.insert_one(
-                {"user_id": int(user.id), "chat_id": chat_id, "name": user.first_name}
-            )
+        # Idempotent approve: upsert on (chat_id,user_id)
+        await approve_d.update_one(
+            {"user_id": int(user.id), "chat_id": chat_id},
+            {"$set": {"name": user.first_name}},
+            upsert=True,
+        )
         a_str = "<a href='tg://user?id={}'>{}</a> has been approved in {}! They will now be ignored by automated admin actions like locks, blocklists, and antiflood."
         await event.respond(
             a_str.format(user.id, user.first_name, title),
@@ -79,7 +81,7 @@ async def dissapprove(event):
         if await is_admin(event, user.id, pm_mode=True):
             return await event.reply(strings.ON_ADMIN)
         if await approve_d.find_one({"user_id": int(user.id), "chat_id": chat_id}):
-            await approve_d.delete_one({"user_id": int(user.id)})
+            await approve_d.delete_one({"user_id": int(user.id), "chat_id": chat_id})
             await event.reply(f"{user.first_name} is no longer approved in {title}.")
             return "DISAPPROVE", user.id, user.first_name
         await event.reply(f"{user.first_name} isn't approved yet!")
@@ -213,7 +215,7 @@ async def _(event):
         if await is_admin(event, user):
             return await event.edit(strings.ON_ADMIN)
         if await approve_d.find_one({"user_id": int(user), "chat_id": event.chat_id}):
-            await approve_d.delete_one({"user_id": int(user)})
+            await approve_d.delete_one({"user_id": int(user), "chat_id": event.chat_id})
             await event.edit(f"{name} is no longer approved in {event.chat.title}.")
             return
         await event.edit(f"{name} isn't approved yet!")
@@ -225,12 +227,12 @@ async def _(event):
             a_str.format(user, name, event.chat.title),
             parse_mode="html",
         )
-        if not await approve_d.find_one(
-            {"user_id": int(user), "chat_id": event.chat_id}
-        ):
-            await approve_d.insert_one(
-                {"user_id": int(user), "chat_id": event.chat_id, "name": user}
-            )
+        # Idempotent approve via upsert
+        await approve_d.update_one(
+            {"user_id": int(user), "chat_id": event.chat_id},
+            {"$set": {"name": name}},
+            upsert=True,
+        )
     elif mode == "unapproveall":
         c_text = f"Are you sure you would like to unapprove **ALL** users in {event.chat.title}? This action cannot be undone."
         buttons = [
