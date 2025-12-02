@@ -78,7 +78,7 @@ async def _message_handler(client, message):
     ):  
         
         try:
-            linked_channel = await GetLinkedChannel(chat_id)
+            linked_channel = await GetLinkedChannel(client, chat_id)
             if linked_channel:
                 if message.forward_from_chat.id == linked_channel:
                     return

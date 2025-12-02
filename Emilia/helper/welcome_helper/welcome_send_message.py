@@ -1,11 +1,11 @@
-from Emilia import BOT_USERNAME, pgram
+from Emilia import BOT_USERNAME
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
 from Emilia.helper.welcome_helper.welcome_fillings import Welcomefillings
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 async def SendWelcomeMessage(
-    message, NewUserJson, content, text, data_type, reply_markup
+    client, message, NewUserJson, content, text, data_type, reply_markup
 ):
     chat_id = message.chat.id
     text = await Welcomefillings(message, text, NewUserJson)
@@ -27,7 +27,7 @@ async def SendWelcomeMessage(
     SentMessage = None
 
     if data_type == 1:
-        SentMessage = await pgram.send_message(
+        SentMessage = await client.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=reply_markup,
@@ -35,14 +35,14 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 2:
-        SentMessage = await pgram.send_sticker(
+        SentMessage = await client.send_sticker(
             chat_id=chat_id,
             sticker=content,
             reply_markup=reply_markup,
         )
 
     elif data_type == 3:
-        SentMessage = await pgram.send_animation(
+        SentMessage = await client.send_animation(
             chat_id=chat_id,
             animation=content,
             caption=text,
@@ -50,7 +50,7 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 4:
-        SentMessage = await pgram.send_document(
+        SentMessage = await client.send_document(
             chat_id=chat_id,
             document=content,
             caption=text,
@@ -58,7 +58,7 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 5:
-        SentMessage = await pgram.send_photo(
+        SentMessage = await client.send_photo(
             chat_id=chat_id,
             photo=content,
             caption=text,
@@ -66,14 +66,14 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 6:
-        SentMessage = await pgram.send_audio(
+        SentMessage = await client.send_audio(
             chat_id=chat_id,
             audio=content,
             caption=text,
             reply_markup=reply_markup,
         )
     elif data_type == 7:
-        SentMessage = await pgram.send_voice(
+        SentMessage = await client.send_voice(
             chat_id=chat_id,
             voice=content,
             caption=text,
@@ -81,7 +81,7 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 8:
-        SentMessage = await pgram.send_video(
+        SentMessage = await client.send_video(
             chat_id=chat_id,
             video=content,
             caption=text,
@@ -89,7 +89,7 @@ async def SendWelcomeMessage(
         )
 
     elif data_type == 9:
-        SentMessage = await pgram.send_video_note(
+        SentMessage = await client.send_video_note(
             chat_id=chat_id,
             video_note=content,
             reply_markup=reply_markup,

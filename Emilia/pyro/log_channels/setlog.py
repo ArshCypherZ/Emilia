@@ -3,7 +3,7 @@ import html
 from pyrogram import Client
 from pyrogram.enums import ChatType
 
-from Emilia import BOT_ID, custom_filter, pgram
+from Emilia import BOT_ID, custom_filter
 from Emilia.helper.chat_status import isUserCan
 from Emilia.helper.get_data import GetChat
 from Emilia.mongo.log_channels_mongo import set_log_db
@@ -21,7 +21,7 @@ async def set_log(client, message):
 
     if await connection(message) is not None:
         chat_id = await connection(message)
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
     else:
         chat_id = message.chat.id
         chat_title = message.chat.title
@@ -46,7 +46,7 @@ async def set_log(client, message):
         return
 
     try:
-        GetChannelData = await pgram.get_chat_member(
+        GetChannelData = await client.get_chat_member(
             chat_id=message.forward_from_chat.id, user_id=BOT_ID
         )
 
@@ -67,7 +67,7 @@ async def set_log(client, message):
                 quote=True,
             )
 
-            await pgram.send_message(
+            await client.send_message(
                 chat_id=channel_id,
                 text=(
                     f"This channel has been set as the log channel for {html.escape(chat_title)}. All new admin actions will be logged here."

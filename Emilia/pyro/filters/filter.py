@@ -46,10 +46,14 @@ async def filter(client, message):
 
     await message.reply(f"Saved filter '`{filter_name}`'")
     content, text, data_type = await GetFIlterMessage(message)
+    reply_to_sender = "{replytag}" in text
+    if reply_to_sender:
+        text = text.replace("{replytag}", "")
     await add_filter_db(
         chat_id,
         filter_name=filter_name,
         content=content,
         text=text,
         data_type=data_type,
+        reply_to_sender=reply_to_sender,
     )

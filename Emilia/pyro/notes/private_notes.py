@@ -4,10 +4,10 @@ from Emilia import BOT_USERNAME
 from Emilia.helper.note_helper.note_send_message import exceNoteMessageSender
 
 
-async def note_redirect(message):
+async def note_redirect(client, message):
     chat_id = int(message.text.split()[1].split("_")[1])
     note_name = message.text.split()[1].split("_")[2]
-    await exceNoteMessageSender(message, note_name, from_chat_id=chat_id)
+    await exceNoteMessageSender(client, message, note_name, from_chat_id=chat_id)
 
 
 async def PrivateNoteButton(message, chat_id, NoteName):

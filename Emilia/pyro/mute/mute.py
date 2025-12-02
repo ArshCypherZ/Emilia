@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram.errors import BadRequest
 from pyrogram.types import ChatPermissions
 
-from Emilia import BOT_ID, custom_filter, pgram
+from Emilia import BOT_ID, custom_filter
 from Emilia.helper.chat_status import can_restrict_member, isBotAdmin, isUserAdmin
 from Emilia.helper.get_user import get_text, get_user_id
 from Emilia.utils.decorators import *
@@ -38,7 +38,7 @@ async def mute(client, message):
         return
 
     try:
-        await pgram.restrict_chat_member(chat_id, user_id, MUTE_PERMISSIONS)
+        await client.restrict_chat_member(chat_id, user_id, MUTE_PERMISSIONS)
     except BadRequest:
         return await message.reply("Give me `ban_user` rights to perform this command.")
 
@@ -60,6 +60,6 @@ async def mute(client, message):
 
     # Deletaion of message according to user admin command
     if message_id is not None:
-        await pgram.delete_messages(chat_id=chat_id, message_ids=message_id)
+        await client.delete_messages(chat_id=chat_id, message_ids=message_id)
 
     return "MUTE", user_info.id, user_info.first_name

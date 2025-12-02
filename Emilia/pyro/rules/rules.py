@@ -18,7 +18,7 @@ from Emilia.pyro.connection.connection import connection
 async def rules(client, message):
     if await connection(message) is not None:
         chat_id = await connection(message)
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
     else:
         chat_id = message.chat.id
         chat_title = message.chat.title
@@ -64,9 +64,9 @@ async def rules(client, message):
         )
 
 
-async def rulesRedirect(message):
+async def rulesRedirect(message, client):
     chat_id = int(message.text.split()[1].split("_")[1])
-    chat_title = await GetChat(chat_id)
+    chat_title = await GetChat(chat_id, client)
     rules_text = await get_rules(chat_id)
 
     rules_text, buttons = button_markdown_parser(rules_text)

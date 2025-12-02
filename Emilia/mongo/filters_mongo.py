@@ -4,7 +4,7 @@ filters = db.filters
 
 
 async def add_filter_db(
-    chat_id: int, filter_name: str, content: str, text: str, data_type: int
+    chat_id: int, filter_name: str, content: str, text: str, data_type: int, reply_to_sender: bool = False
 ):
     # Try to update existing filter by name
     res = await filters.update_one(
@@ -15,6 +15,7 @@ async def add_filter_db(
                 "filters.$.content": content,
                 "filters.$.text": text,
                 "filters.$.data_type": data_type,
+                "filters.$.reply_to_sender": reply_to_sender,
             }
         },
     )
@@ -35,6 +36,7 @@ async def add_filter_db(
                         "content": content,
                         "text": text,
                         "data_type": data_type,
+                        "reply_to_sender": reply_to_sender,
                     }
                 }
             },
@@ -60,7 +62,7 @@ async def get_filter(chat_id: int, filter_name: str):
     )
     if doc and doc.get("filters"):
         f = doc["filters"][0]
-        return (f.get("filter_name"), f.get("content"), f.get("text"), f.get("data_type"))
+        return (f.get("filter_name"), f.get("content"), f.get("text"), f.get("data_type"), f.get("reply_to_sender", False))
 
 
 async def get_filters_list(chat_id: int):

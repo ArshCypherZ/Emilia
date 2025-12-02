@@ -3,21 +3,21 @@ from datetime import datetime, timedelta
 
 from pyrogram import Client, enums
 
-from Emilia import custom_filter, db, pgram, LOGGER
+from Emilia import custom_filter, db, LOGGER
 from Emilia.helper.disable import disable
 
 collection = db.coup
 
 
-async def select_couples(chat_id):
+async def select_couples(client, chat_id):
     try:
         members = []
-        async for member in pgram.get_chat_members(chat_id):
+        async for member in client.get_chat_members(chat_id):
             if not member.user.is_bot:
                 members.append(member.user.id)
 
         if len(members) < 2:
-            await pgram.send_message(
+            await client.send_message(
                 chat_id, "Oops! We need at least two members to form a couple!"
             )
             return
@@ -38,20 +38,20 @@ async def select_couples(chat_id):
             upsert=True,
         )
 
-        couple_a_user = await pgram.get_users(couple_a)
-        couple_b_user = await pgram.get_users(couple_b)
+        couple_a_user = await client.get_users(couple_a)
+        couple_b_user = await client.get_users(couple_b)
 
         couple_a_mention = couple_a_user.mention if couple_a_user else "User not found"
         couple_b_mention = couple_b_user.mention if couple_b_user else "User not found"
 
-        await pgram.send_message(
+        await client.send_message(
             chat_id,
             f"New couples have been selected! They're bound by fate for the next 24 hours! 🎉💖\n\n"
             f"💑 {couple_a_mention} and {couple_b_mention} 💑",
         )
 
     except Exception as e:
-        await pgram.send_message(chat_id, f"Something went wrong: {str(e)}")
+        await client.send_message(chat_id, f"Something went wrong: {str(e)}")
 
 
 async def get_couples(chat_id):
@@ -72,26 +72,26 @@ async def choose_couples_command(client, message):
         couple_a_id = couple_data.get("couple_a")
         couple_b_id = couple_data.get("couple_b")
 
-        couple_a = await get_user_or_not_found(couple_a_id)
-        couple_b = await get_user_or_not_found(couple_b_id)
+        couple_a = await get_user_or_not_found(client, couple_a_id)
+        couple_b = await get_user_or_not_found(client, couple_b_id)
         if couple_a is None or couple_b is None:
-            await select_couples(chat_id)
+            await select_couples(client, chat_id)
             return
         remaining_time = couple_data["expiration_time"] - datetime.now()
         hours_left = remaining_time.seconds // 3600
-        await pgram.send_message(
+        await client.send_message(
             chat_id,
             f"🥰 **{couple_a.first_name}** and **{couple_b.first_name}** are the couple of the day! 🥰\n\n"
             f"⏳ {hours_left} hours left until the next selection! ⏳",
         )
 
     else:
-        await select_couples(chat_id)
+        await select_couples(client, chat_id)
 
 
-async def get_user_or_not_found(user_id):
+async def get_user_or_not_found(client, user_id):
     try:
-        user = await pgram.get_users(user_id)
+        user = await client.get_users(user_id)
         return user
     except Exception as e:
         LOGGER.error(f"Error retrieving user: {e}")

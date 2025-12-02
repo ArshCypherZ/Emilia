@@ -1,6 +1,6 @@
 from pyrogram.enums import MessageEntityType
 
-from Emilia import db, pgram
+from Emilia import db
 
 db_ = db.users
 
@@ -24,19 +24,19 @@ async def extract_userid(message, text: str):
 
     entities = message.entities
     if len(entities) < 2:
-        return (await pgram.get_users(text)).id
+        return (await message._client.get_users(text)).id
     entity = entities[1]
     if entity.type == MessageEntityType.MENTION:
         # using to avoid flooding tg api
         m = await db_.find_one({"user_name": text.replace("@", "")})
         if m and m["user_id"]:
             return m["user_id"]
-        return (await pgram.get_users(text)).id
+        return (await message._client.get_users(text)).id
     elif entity.type == MessageEntityType.URL:
         m = await db_.find_one({"user_name": text.split("/")[-1]})
         if m and m["user_id"]:
             return m["user_id"]
-        return (await pgram.get_users(text.split("/")[-1])).id
+        return (await message._client.get_users(text.split("/")[-1])).id
     if entity.type == MessageEntityType.TEXT_MENTION:
         return entity.user.id
     return None

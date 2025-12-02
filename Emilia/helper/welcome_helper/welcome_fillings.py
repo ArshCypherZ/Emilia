@@ -1,6 +1,6 @@
 import html
 
-from Emilia import pgram
+
 
 
 async def Welcomefillings(message, message_text, NewUserJson):
@@ -14,7 +14,7 @@ async def Welcomefillings(message, message_text, NewUserJson):
         username = NewUserJson.username if NewUserJson.username else NewUserJson.mention
         mention = NewUserJson.mention
         chat_title = html.escape(message.chat.title)
-        count = (await pgram.get_chat(message.chat.id)).members_count
+        count = (await message._client.get_chat(message.chat.id)).members_count
 
         if "{id}" in message_text:
             message_text = message_text.replace("{id}", str(user_id))

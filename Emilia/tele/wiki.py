@@ -31,7 +31,7 @@ async def get_wikipedia_summary(search):
 
 @register(pattern="wiki", disable=True)
 @disable
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def wiki(event):
     if event.is_reply:
         search_query = (await event.get_reply_message()).text.strip()

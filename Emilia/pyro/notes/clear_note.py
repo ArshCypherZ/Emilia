@@ -46,7 +46,7 @@ async def ClearAll_Note(client, message):
     owner_id = message.from_user.id
     if await connection(message) is not None:
         chat_id = await connection(message)
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
         chat_title = html.escape(chat_title)
     else:
         chat_id = message.chat.id

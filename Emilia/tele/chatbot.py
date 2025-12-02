@@ -17,7 +17,7 @@ from Emilia.custom_filter import register
 from Emilia.functions.admins import is_admin
 from Emilia.utils.decorators import *
 
-API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDFtS") # Get your API key from Google Gemini API
+API_KEY = os.getenv("GEMINI_API_KEY", "AIza")
 client = genai.Client(api_key=API_KEY)
 chatbotdb = db.chatbotto
 convodb = db.gemini_convos
@@ -224,7 +224,7 @@ async def _update_user_memory(user_id: int, user_text: str, bot_text: str):
             max_output_tokens=128,
         )
         resp = await client.aio.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt,
             config=cfg,
         )
@@ -269,11 +269,11 @@ async def _get_or_create_chat(user_id: int):
 
     try:
         # Create chat without unsupported system_instruction arg
-        chat = client.aio.chats.create(model="gemini-1.5-flash")
+        chat = client.aio.chats.create(model="gemini-2.0-flash")
         USER_CHATS[user_id] = {"chat": chat, "last_used": time.time(), "sys_inst": sys_inst}
         await convodb.update_one(
             {"user_id": user_id},
-            {"$set": {"user_id": user_id, "model": "gemini-1.5-flash"}},
+            {"$set": {"user_id": user_id, "model": "gemini-2.0-flash"}},
             upsert=True,
         )
         LOGGER.info(f"[GeminiChat] Created chat session for user {user_id}")

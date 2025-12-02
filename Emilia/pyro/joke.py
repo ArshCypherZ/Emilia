@@ -9,7 +9,7 @@ from Emilia.utils.decorators import *
 @Client.on_message(
     custom_filter.command(commands=["joke", "jokes", "funny"], disable=True)
 )
-@rate_limit(10, 60)
+@rate_limit(RATE_LIMIT_GENERAL)
 @disable
 async def joke(client, message):
     try:

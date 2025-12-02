@@ -1,6 +1,6 @@
 from pyrogram.types import ChatPermissions, InlineKeyboardMarkup
 
-from Emilia import pgram
+
 from Emilia.helper.button_gen import button_markdown_parser
 from Emilia.mongo.welcome_mongo import (
     AppendVerifiedUsers,
@@ -10,8 +10,8 @@ from Emilia.mongo.welcome_mongo import (
 )
 
 
-async def passedAction(chat_id: int, user_id: int, message_id: int):
-    await pgram.restrict_chat_member(
+async def passedAction(client, chat_id: int, user_id: int, message_id: int):
+    await client.restrict_chat_member(
         chat_id,
         user_id,
         ChatPermissions(can_send_messages=True, can_add_web_page_previews=True),
@@ -26,7 +26,7 @@ async def passedAction(chat_id: int, user_id: int, message_id: int):
     else:
         reply_markup = None
 
-    await pgram.edit_message_reply_markup(
+    await client.edit_message_reply_markup(
         chat_id=chat_id, message_id=message_id, reply_markup=reply_markup
     )
 
@@ -34,12 +34,12 @@ async def passedAction(chat_id: int, user_id: int, message_id: int):
     await AppendVerifiedUsers(chat_id, user_id)
 
 
-async def failedAction(message, user_id: int, chat_id: int, message_id: int):
-    await pgram.ban_chat_member(chat_id=chat_id, user_id=user_id)
+async def failedAction(client, message, user_id: int, chat_id: int, message_id: int):
+    await client.ban_chat_member(chat_id=chat_id, user_id=user_id)
 
-    await pgram.edit_message_text(
+    await client.edit_message_text(
         chat_id=chat_id,
         message_id=message_id,
         text=(f"User {message.from_user.mention} has failed the CAPTCHAs!"),
     )
-    await pgram.unban_chat_member(chat_id=chat_id, user_id=user_id)
+    await client.unban_chat_member(chat_id=chat_id, user_id=user_id)

@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram.enums import ChatType
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import BOT_USERNAME, custom_filter, pgram
+from Emilia import BOT_USERNAME, custom_filter
 from Emilia.helper.chat_status import isUserAdmin
 from Emilia.helper.get_data import GetChat
 from Emilia.mongo.connection_mongo import connectDB, get_allow_connection
@@ -27,13 +27,13 @@ async def Connect(client, message):
             )
             return
 
-        chat_title = await GetChat(int(chat_id))
+        chat_title = await GetChat(int(chat_id), client)
         if chat_title is None:
             await message.reply(
                 "failed to connect to chat!\nError: `chat not found`", quote=True
             )
         else:
-            await connect_button(message, int(chat_id))
+            await connect_button(client, message, int(chat_id))
     else:
         chat_id = message.chat.id
         await message.reply(
@@ -51,12 +51,12 @@ async def Connect(client, message):
         )
 
 
-async def connectRedirect(message):
+async def connectRedirect(client, message):
     chat_id = int(message.text.split("_")[1])
-    await connect_button(message, chat_id)
+    await connect_button(client, message, chat_id)
 
 
-async def connect_button(message, chat_id):
+async def connect_button(client, message, chat_id):
 
     user_id = message.from_user.id
     if await isUserAdmin(
@@ -81,7 +81,7 @@ async def connect_button(message, chat_id):
         else:
             keyboard = []
 
-    chat_title = await GetChat(chat_id)
+    chat_title = await GetChat(chat_id, client)
 
     reply_markup = None
     text = f"Users are **not** allowed to connect in {html.escape(chat_title)}."
@@ -90,7 +90,7 @@ async def connect_button(message, chat_id):
         reply_markup = InlineKeyboardMarkup(keyboard)
         text = f"You have been connected to {html.escape(chat_title)}!"
 
-    await pgram.send_message(
+    await client.send_message(
         text=text,
         chat_id=message.from_user.id,
         reply_markup=reply_markup,

@@ -1,6 +1,6 @@
 from pyrogram import Client, enums, filters
 
-from Emilia import pgram
+
 from Emilia.helper.chat_status import isBotCan
 from Emilia.mongo.pin_mongo import get_antichannelpin
 
@@ -12,7 +12,7 @@ async def cleanlinkedChecker(client, message):
     if not (await get_antichannelpin(chat_id)):
         return
 
-    channel_id = await GetLinkedChannel(chat_id)
+    channel_id = await GetLinkedChannel(client, chat_id)
     if channel_id is not None:
         if (
             message.forward_from_chat
@@ -24,11 +24,11 @@ async def cleanlinkedChecker(client, message):
                     "I don't have the right to pin or unpin messages in this chat.\nError: `could_not_unpin`"
                 )
 
-            await pgram.unpin_chat_message(chat_id=chat_id, message_id=message_id)
+            await client.unpin_chat_message(chat_id=chat_id, message_id=message_id)
 
 
-async def GetLinkedChannel(chat_id: int) -> str:
-    chat_data = await pgram.get_chat(chat_id=chat_id)
+async def GetLinkedChannel(client, chat_id: int) -> str:
+    chat_data = await client.get_chat(chat_id=chat_id)
     if chat_data.linked_chat:
         return chat_data.linked_chat.id
     else:

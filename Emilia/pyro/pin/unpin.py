@@ -1,6 +1,6 @@
 from pyrogram import Client
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import CheckAllAdminsStuffs
 from Emilia.utils.decorators import *
 
@@ -18,14 +18,14 @@ async def unpin(client, message):
             f"http://t.me/c/{str(chat_id).replace(str(-100), '')}/{pinned_message_id}"
         )
         await message.reply(f"Unpinned [this message]({message_link}).")
-        await pgram.unpin_chat_message(chat_id=chat_id, message_id=pinned_message_id)
+        await client.unpin_chat_message(chat_id=chat_id, message_id=pinned_message_id)
 
     else:
-        chat_data = await pgram.get_chat(chat_id=chat_id)
+        chat_data = await client.get_chat(chat_id=chat_id)
         if chat_data.pinned_message:
             pinned_message_id = chat_data.pinned_message.id
             await message.reply(f"Unpinned the last pinned message.")
-            await pgram.unpin_chat_message(
+            await client.unpin_chat_message(
                 chat_id=chat_id, message_id=pinned_message_id
             )
         else:

@@ -14,7 +14,7 @@ from Emilia.utils.decorators import *
 @description("This will send desired wallpaper.")
 @register(pattern="wall", disable=True)
 @disable
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def some1(event):
     try:
         inpt: str = (

@@ -1,15 +1,16 @@
 from emoji import demojize
 from pyrogram.types import Message
 
-from Emilia import pgram
+
 from Emilia.mongo.users_mongo import GetChatName
 
 
-async def GetChat(chat_id: int):
+async def GetChat(chat_id: int, client=None):
     """This function return chat_title of the given chat_id from the database of the bot.
 
     Args:
         chat_id (int): chat_id: message.chat.id
+        client (Client, optional): Pyrogram client instance.
 
     Returns:
         [type]: chat's title
@@ -18,12 +19,13 @@ async def GetChat(chat_id: int):
         chat_title = await GetChatName(chat_id)
         return chat_title
     else:
-        await pgram.send_message(
-            chat_id=chat_id,
-            text=(
-                f"I couldn't find the chat in my database. Please execute /forcecachechat here to make me be able to store your chat's data!"
-            ),
-        )
+        if client:
+            await client.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"I couldn't find the chat in my database. Please execute /forcecachechat here to make me be able to store your chat's data!"
+                ),
+            )
         return
 
 

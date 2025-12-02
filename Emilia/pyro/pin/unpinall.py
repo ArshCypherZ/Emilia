@@ -1,7 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import CheckAllAdminsStuffs, isUserCan
 from Emilia.utils.decorators import *
 
@@ -43,7 +43,7 @@ async def unpinall_callback(client: Client, callback_query: CallbackQuery):
         )
 
     if query_data == "yes":
-        await pgram.unpin_all_chat_messages(chat_id=chat_id)
+        await client.unpin_all_chat_messages(chat_id=chat_id)
         await callback_query.message.reply("All pinned messages have been unpinned.")
         await callback_query.message.delete()
 

@@ -1,6 +1,6 @@
 from pyrogram import Client
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import CheckAllAdminsStuffs
 from Emilia.utils.decorators import *
 from Emilia.utils.decorators import logging
@@ -27,7 +27,7 @@ async def pin(client, message):
         and message.text.split()[1] in ("silent", "quiet")
     ):
         await message.reply(f"I have pinned [this message]({message_link}).")
-        await pgram.pin_chat_message(
+        await client.pin_chat_message(
             chat_id=chat_id, message_id=pin_message_id, disable_notification=True
         )
         return "PIN", None, None
@@ -40,7 +40,7 @@ async def pin(client, message):
         await message.reply(
             f"I have pinned [this message]({message_link}) and notified all members."
         )
-        await pgram.pin_chat_message(
+        await client.pin_chat_message(
             chat_id=chat_id, message_id=pin_message_id, disable_notification=False
         )
         return "LOUD_PIN", None, None

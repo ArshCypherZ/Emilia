@@ -18,4 +18,6 @@ RUN pip3 install --no-cache-dir -U -r requirements.txt
 
 COPY . .
 
-CMD ["python3", "-m", "Emilia"]
+STOPSIGNAL SIGTERM
+
+CMD ["python3", "-u", "-m", "Emilia"]

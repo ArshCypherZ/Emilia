@@ -2,7 +2,7 @@ from asyncio import sleep
 
 from pyrogram import Client, enums, filters
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import isUserAdmin
 from Emilia.mongo.report_mongo import get_report
 
@@ -26,7 +26,7 @@ async def report_(client, message):
 
     reported_user = message.reply_to_message.from_user
 
-    admin_data = pgram.get_chat_members(
+    admin_data = client.get_chat_members(
         chat_id=chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS
     )
 

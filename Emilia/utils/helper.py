@@ -54,41 +54,62 @@ def rand_key():
 
 def control_user(func):
     async def wrapper(_, message: Message):
-        msg = json.loads(str(message))
-        gid = msg["chat"]["id"]
-        gidtype = msg["chat"]["type"]
-        if gidtype in [ChatType.SUPERGROUP, ChatType.GROUP] and not (
-            await GROUPS.find_one({"_id": gid})
-        ):
-            try:
-                gidtitle = msg["chat"]["username"]
-            except KeyError:
-                gidtitle = msg["chat"]["title"]
-            await GROUPS.update_one({"_id": gid}, {"$set": {"grp": gidtitle}}, upsert=True)
+        chat_id = message.chat.id
+        chat_type = message.chat.type
+        user_id = message.from_user.id if message.from_user else message.chat.id
+        
+        # Parallelize DB checks
+        group_check_task = None
+        if chat_type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+            group_check_task = GROUPS.find_one({"_id": chat_id})
+        
+        ignore_check_task = IGNORE.find_one({"_id": user_id})
+        
+        # Execute DB checks concurrently
+        results = await asyncio.gather(
+            group_check_task if group_check_task else asyncio.sleep(0),
+            ignore_check_task
+        )
+        
+        group_data = results[0]
+        ignore_data = results[1]
+
+        if group_check_task and not group_data:
+            gidtitle = message.chat.username or message.chat.title
+            await GROUPS.update_one({"_id": chat_id}, {"$set": {"grp": gidtitle}}, upsert=True)
             await clog(
                 "Emilia",
-                f"Bot added to a new group\n\n{gidtitle}\nID: `{gid}`",
+                f"Bot added to a new group\n\n{gidtitle}\nID: `{chat_id}`",
                 "NEW_GROUP",
             )
-        try:
-            user = msg["from_user"]["id"]
-        except KeyError:
-            user = msg["chat"]["id"]
-        if await IGNORE.find_one({"_id": user}):
+
+        if ignore_data:
             return
-        nut = time()
-        if user not in DEV_USERS:
+
+        # Rate Limiting with Redis
+        if user_id not in DEV_USERS:
             try:
-                out = USER_JSON[user]
-                if nut - out < 1.2:
-                    USER_WC[user] += 1
-                    if USER_WC[user] == 3:
+                from Emilia import redis_client
+                key = f"spam_check:{user_id}"
+                
+                # Check last message time
+                last_time = await redis_client.get(key)
+                current_time = time()
+                
+                if last_time and (current_time - float(last_time) < 1.2):
+                    # Increment spam count
+                    count_key = f"spam_count:{user_id}"
+                    spam_count = await redis_client.incr(count_key)
+                    await redis_client.expire(count_key, 10) # 10s expiry
+                    
+                    if spam_count == 3:
                         await message.reply_text(
                             ("Stop spamming bot!!!" + "\nElse you will be blacklisted"),
                         )
-                        await clog("Emilia", f"UserID: {user}", "SPAM")
-                    if USER_WC[user] == 5:
-                        await IGNORE.update_one({"_id": user}, {"$set": {"_id": user}}, upsert=True)
+                        await clog("Emilia", f"UserID: {user_id}", "SPAM")
+                    
+                    if spam_count >= 5:
+                        await IGNORE.update_one({"_id": user_id}, {"$set": {"_id": user_id}}, upsert=True)
                         await message.reply_text(
                             (
                                 "You have been exempted from using this bot "
@@ -97,16 +118,26 @@ def control_user(func):
                                 + "@SpiralTechDivision"
                             )
                         )
-                        await clog("Emilia", f"UserID: {user}", "BAN")
+                        await clog("Emilia", f"UserID: {user_id}", "BAN")
                         return
-                    await asyncio.sleep(USER_WC[user])
+                    
+                    # Wait based on spam count to slow them down
+                    await asyncio.sleep(spam_count)
                 else:
-                    USER_WC[user] = 0
-            except KeyError:
+                    # Reset spam count if gap is large enough
+                    await redis_client.delete(f"spam_count:{user_id}")
+                
+                # Update last message time
+                await redis_client.set(key, current_time, ex=5)
+                
+            except Exception:
                 pass
-            USER_JSON[user] = nut
+
+        # Convert message to dict for compatibility with functions expecting mdata
+        mdata = json.loads(str(message))
+        
         try:
-            await func(_, message, msg)
+            await func(_, message, mdata)
         except FloodWait as e:
             await asyncio.sleep(_fw_delay_seconds(e))
         except MessageNotModified:
@@ -119,7 +150,7 @@ def control_user(func):
             try:
                 await clog(
                     "Emilia",
-                    "Message:\n" + msg["text"] + "\n\n" + "```" + e + "```",
+                    "Message:\n" + (message.text or "") + "\n\n" + "```" + e + "```",
                     "COMMAND",
                     msg=message,
                     replied=reply_msg,
@@ -132,35 +163,44 @@ def control_user(func):
 
 def check_user(func):
     async def wrapper(_, c_q: CallbackQuery):
-        cq = json.loads(str(c_q))
-        user = cq["from_user"]["id"]
-        if await IGNORE.find_one({"_id": user}):
+        user_id = c_q.from_user.id
+        if await IGNORE.find_one({"_id": user_id}):
             return
+            
+        cq_data = c_q.data
         cqowner_is_ch = False
-        cqowner = cq["data"].split("_").pop()
+        cqowner = cq_data.split("_").pop()
+        
         if "-100" in cqowner:
             cqowner_is_ch = True
             ccdata = await CC.find_one({"_id": cqowner})
-            if ccdata and ccdata["usr"] == user:
+            if ccdata and ccdata["usr"] == user_id:
                 user_valid = True
             else:
                 user_valid = False
-        if user in DEV_USERS or user == int(cqowner):
-            if user not in DEV_USERS:
+        else:
+            try:
+                cqowner_int = int(cqowner)
+            except ValueError:
+                cqowner_int = 0
+            user_valid = (user_id == cqowner_int)
+
+        if user_id in DEV_USERS or user_valid:
+            if user_id not in DEV_USERS:
                 nt = time()
                 try:
-                    ot = USER_JSON[user]
-                    if nt - ot < 1.4:
+                    ot = USER_JSON.get(user_id)
+                    if ot and nt - ot < 1.4:
                         await c_q.answer(
                             ("Stop spamming bot!!!\n" + "Else you will be blacklisted"),
                             show_alert=True,
                         )
-                        await clog("Emilia", f"UserID: {user}", "SPAM")
-                except KeyError:
+                        await clog("Emilia", f"UserID: {user_id}", "SPAM")
+                except Exception:
                     pass
-                USER_JSON[user] = nt
+                USER_JSON[user_id] = nt
             try:
-                await func(_, c_q, cq)
+                await func(_, c_q)
             except FloodWait as e:
                 await asyncio.sleep(_fw_delay_seconds(e))
             except MessageNotModified:
@@ -173,7 +213,7 @@ def check_user(func):
                 try:
                     await clog(
                         "Emilia",
-                        "Callback:\n" + cq["data"] + "\n\n" + "```" + e + "```",
+                        "Callback:\n" + cq_data + "\n\n" + "```" + e + "```",
                         "CALLBACK",
                         cq=c_q,
                         replied=reply_msg,
@@ -182,29 +222,7 @@ def check_user(func):
                     await clog("Emilia", e, "FAILURE", cq=c_q)
         else:
             if cqowner_is_ch:
-                if user_valid:
-                    try:
-                        await func(_, c_q, cq)
-                    except FloodWait as e:
-                        await asyncio.sleep(_fw_delay_seconds(e))
-                    except MessageNotModified:
-                        pass
-                    except Exception:
-                        e = err()
-                        reply_msg = None
-                        if func.__name__ == "tracemoe_btn":
-                            reply_msg = c_q.message.reply_to_message
-                        try:
-                            await clog(
-                                "Emilia",
-                                "Callback:\n" + cq["data"] + "\n\n" + "```" + e + "```",
-                                "CALLBACK_ANON",
-                                cq=c_q,
-                                replied=reply_msg,
-                            )
-                        except Exception:
-                            await clog("Emilia", e, "FAILURE", cq=c_q)
-                else:
+                if not user_valid:
                     await c_q.answer(
                         (
                             "No one can click buttons on queries made by "

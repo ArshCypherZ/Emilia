@@ -42,7 +42,7 @@ async def connection(message):
             if await get_allow_connection(connected_chat):
                 bot_admin = False
                 try:
-                    bot_admin = await isUserBanned(connected_chat, user_id)
+                    bot_admin = await isUserBanned(connected_chat, user_id, message._client)
                 except BaseException:
                     return None
 

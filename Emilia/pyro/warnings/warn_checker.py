@@ -3,7 +3,7 @@ import time
 
 from pyrogram.types import ChatPermissions
 
-from Emilia import pgram
+
 from Emilia.mongo.warnings_mongo import (
     count_user_warn,
     get_all_warn_reason,
@@ -24,10 +24,10 @@ async def warn_checker(client, message, user_id, silent=False):
         warn_mode, warn_mode_time = await get_warn_mode(chat_id)
 
         if warn_mode == 1:
-            await pgram.ban_chat_member(chat_id, user_id)
+            await client.ban_chat_member(chat_id, user_id)
 
             if not silent:
-                user_info = await pgram.get_users(user_ids=user_id)
+                user_info = await client.get_users(user_ids=user_id)
                 REASONS = await get_all_warn_reason(chat_id, user_id)
 
                 text = f"That's {countuser_warn}/{warnlimit} warnings; {user_info.mention} is banned!\n"
@@ -39,16 +39,16 @@ async def warn_checker(client, message, user_id, silent=False):
             return True, log_msg
 
         elif warn_mode == 2:
-            await pgram.ban_chat_member(
+            await client.ban_chat_member(
                 chat_id,
                 user_id,
                 # wait 60 seconds in case of server goes down at unbanning time
                 int(time.time()) + 60,
             )
-            await pgram.unban_chat_member(chat_id, user_id)
+            await client.unban_chat_member(chat_id, user_id)
 
             if not silent:
-                user_info = await pgram.get_users(user_ids=user_id)
+                user_info = await client.get_users(user_ids=user_id)
                 REASONS = await get_all_warn_reason(chat_id, user_id)
 
                 text = f"That's {countuser_warn}/{warnlimit} warnings; {user_info.mention} is kicked!\n"
@@ -61,17 +61,17 @@ async def warn_checker(client, message, user_id, silent=False):
             # Unbanning proceess and wait 5 sec to give server to kick user
             # first
             await asyncio.sleep(5)
-            await pgram.unban_chat_member(chat_id, user_id)
+            await client.unban_chat_member(chat_id, user_id)
 
             return True, log_msg
 
         elif warn_mode == 3:
-            await pgram.restrict_chat_member(
+            await client.restrict_chat_member(
                 chat_id, user_id, ChatPermissions(can_send_messages=False)
             )
 
             if not silent:
-                user_info = await pgram.get_users(user_ids=user_id)
+                user_info = await client.get_users(user_ids=user_id)
                 REASONS = await get_all_warn_reason(chat_id, user_id)
 
                 text = f"That's {countuser_warn}/{warnlimit} warnings; {user_info.mention} is muted!\n"
@@ -84,10 +84,10 @@ async def warn_checker(client, message, user_id, silent=False):
 
         elif warn_mode == 4:
             until_time = int(time.time() + int(warn_mode_time))
-            await pgram.restrict_chat_member(chat_id, user_id, until_date=until_time)
+            await client.restrict_chat_member(chat_id, user_id, until_date=until_time)
 
             if not silent:
-                user_info = await pgram.get_users(user_ids=user_id)
+                user_info = await client.get_users(user_ids=user_id)
                 REASONS = await get_all_warn_reason(chat_id, user_id)
 
                 text = f"That's {countuser_warn}/{warnlimit} warnings; {user_info.mention} is temporarily banned!\n"
@@ -100,7 +100,7 @@ async def warn_checker(client, message, user_id, silent=False):
 
         elif warn_mode == 5:
             until_time = int(time.time() + int(warn_mode_time))
-            await pgram.restrict_chat_member(
+            await client.restrict_chat_member(
                 chat_id,
                 user_id,
                 ChatPermissions(can_send_messages=False),
@@ -108,7 +108,7 @@ async def warn_checker(client, message, user_id, silent=False):
             )
 
             if not silent:
-                user_info = await pgram.get_users(user_ids=user_id)
+                user_info = await client.get_users(user_ids=user_id)
                 REASONS = await get_all_warn_reason(chat_id, user_id)
 
                 text = f"That's {countuser_warn}/{warnlimit} warnings; {user_info.mention} is temporarily muted!\n"

@@ -21,7 +21,7 @@ from Emilia.utils.decorators import *
 @example("/zip [reply to file]")
 @register(pattern="zip")
 @exception
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def _(event):
     if event.fwd_from:
         return
@@ -76,7 +76,7 @@ if not os.path.isdir(extracted):
 @example("/unzip [reply to zip file]")
 @register(pattern="unzip")
 @exception
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def _(event):
     if event.fwd_from:
         return

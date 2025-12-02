@@ -7,7 +7,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
 )
 
-from Emilia import LOGGER, custom_filter, pgram
+from Emilia import LOGGER, custom_filter
 from Emilia.helper.chat_status import check_user, isUserAdmin
 from Emilia.mongo.nightmode_mongo import (
     get_nightchats,
@@ -87,7 +87,7 @@ async def nightcb(app: Client, query: CallbackQuery):
         )
 
 
-async def start_nightmode():
+async def start_nightmode(client):
     chats = []
     schats = await get_nightchats()
 
@@ -99,8 +99,8 @@ async def start_nightmode():
 
     for add_chat in chats:
         try:
-            await pgram.set_chat_permissions(add_chat, CLOSE_CHAT)
-            await pgram.send_message(
+            await client.set_chat_permissions(add_chat, CLOSE_CHAT)
+            await client.send_message(
                 add_chat,
                 text="Nightmode [12 AM] has been started! Closing this group...come back later <3",
             )
@@ -109,7 +109,7 @@ async def start_nightmode():
             LOGGER.error(f"Unable To close group {add_chat} - {e}")
 
 
-async def close_nightmode():
+async def close_nightmode(client):
     chats = []
     schats = await get_nightchats()
     for chat in schats:
@@ -118,8 +118,8 @@ async def close_nightmode():
         return
     for rm_chat in chats:
         try:
-            await pgram.set_chat_permissions(rm_chat, OPEN_CHAT)
-            await pgram.send_message(
+            await client.set_chat_permissions(rm_chat, OPEN_CHAT)
+            await client.send_message(
                 rm_chat,
                 text="Nightmode [6 AM] has been closed! Opening this group...good morning everyone <3",
             )
@@ -128,5 +128,9 @@ async def close_nightmode():
 
 
 scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
-scheduler.add_job(start_nightmode, trigger="cron", hour=23, minute=59)
-scheduler.add_job(close_nightmode, trigger="cron", hour=6, minute=1)
+
+
+def start_nightmode_scheduler(client):
+    scheduler.add_job(start_nightmode, trigger="cron", hour=23, minute=59, args=[client])
+    scheduler.add_job(close_nightmode, trigger="cron", hour=6, minute=1, args=[client])
+    scheduler.start()

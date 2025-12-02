@@ -33,10 +33,12 @@ async def __exec(e):
 
 @auth(pattern="eval")
 async def eval_e(event):
+    try:
+        cmd = event.text.split(None, 1)[1]
+    except IndexError:
+        return await event.reply("`Usage: /eval <python_code>`")
+    
     xx = await event.reply("`Processing..`")
-    cmd = event.text.split(None, 1)[1]
-    if not cmd:
-        return await xx.edit("`Give some code`")
     if event.reply_to_msg_id:
         reply_to_id = event.reply_to_msg_id
     old_stderr = sys.stderr

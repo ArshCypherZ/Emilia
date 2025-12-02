@@ -2,17 +2,16 @@ from Emilia import db
 from Emilia.functions.admins import is_owner
 from Emilia.custom_filter import register
 import Emilia.strings as strings
-from Emilia.utils.decorators import rate_limit
+from Emilia.utils.decorators import rate_limit, RATE_LIMIT_SUPER_HEAVY
 from Emilia.pyro.connection.connection import connection
-import json
+import orjson
 import os
 from bson import ObjectId
 
-class JSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, ObjectId):
-            return str(obj)
-        return super(JSONEncoder, self).default(obj)
+def default(obj):
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    raise TypeError
 
 collections = {
     'blocklists': db['blocklists'],
@@ -26,7 +25,7 @@ collections = {
 }
 
 @register(pattern="export")
-@rate_limit(3, 1800)
+@rate_limit(RATE_LIMIT_SUPER_HEAVY)
 async def export_settings(event):
     chat_id = await connection(event) if await connection(event) else event.chat_id
     if event.is_private and not str(chat_id).startswith('-100'):
@@ -60,7 +59,7 @@ async def export_settings(event):
         await event.reply("No settings found.")
         return
 
-    settings_json = json.dumps(exported_data, indent=4, cls=JSONEncoder)
+    settings_json = orjson.dumps(exported_data, option=orjson.OPT_INDENT_2, default=default).decode('utf-8')
     file_name = f"chat_settings_{chat_id}.json"
     
     with open(file_name, 'w') as file:
@@ -71,7 +70,7 @@ async def export_settings(event):
 
 
 @register(pattern="import")
-@rate_limit(3, 1800)
+@rate_limit(RATE_LIMIT_SUPER_HEAVY)
 async def import_settings(event):
     chat_id = await connection(event) if await connection(event) else event.chat_id
     if event.is_private and not str(chat_id).startswith('-100'):
@@ -92,8 +91,8 @@ async def import_settings(event):
 
     file_path = await message.download_media()
 
-    with open(file_path, 'r') as file:
-        settings = json.load(file)
+    with open(file_path, 'rb') as file:
+        settings = orjson.loads(file.read())
 
     for key, value in settings.items():
         collection = collections.get(key)
@@ -107,7 +106,7 @@ async def import_settings(event):
 
 
 @register(pattern="chatreset")
-@rate_limit(3, 1800)
+@rate_limit(RATE_LIMIT_SUPER_HEAVY)
 async def reset_settings(event):
     chat_id = await connection(event) if await connection(event) else event.chat_id
     if event.is_private and not str(chat_id).startswith('-100'):

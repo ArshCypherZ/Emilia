@@ -25,7 +25,7 @@ from pyrogram.raw.types import (
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import EVENT_LOGS as LOG_CHANNEL, BOT_USERNAME, LOGGER
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.disable import disable
 from Emilia.helper.http import http
 from Emilia.utils.decorators import *
@@ -152,7 +152,7 @@ async def unkang(c, m):
                 access_hash=decoded.access_hash,
                 file_reference=decoded.file_reference,
             )
-            await pgram.invoke(RemoveStickerFromSet(sticker=sticker))
+            await c.invoke(RemoveStickerFromSet(sticker=sticker))
             await m.reply("💌 Sticker has been removed from your pack.")
         except Exception as e:
             await m.reply(f"Failed to remove sticker from your pack.\n\n**Error**: {e}")
@@ -270,7 +270,7 @@ async def kang_sticker(c, m):
         return
     try:
         if resize:
-            filename = resize_image(filename)
+            filename = await resize_image(filename)
         elif convert:
             filename = await convert_video(filename)
             if filename is False:
@@ -393,7 +393,8 @@ async def kang_sticker(c, m):
             pass
 
 
-def resize_image(filename: str) -> str:
+
+def resize_image_sync(filename: str) -> str:
     im = Image.open(filename)
     maxsize = 512
     scale = maxsize / max(im.width, im.height)
@@ -408,8 +409,13 @@ def resize_image(filename: str) -> str:
     return png_image
 
 
-async def convert_video(input):
-    vid = cv2.VideoCapture(input)
+async def resize_image(filename: str) -> str:
+    from Emilia.utils.executors import run_in_process
+    return await run_in_process(resize_image_sync, filename)
+
+
+def convert_video_sync(input_file):
+    vid = cv2.VideoCapture(input_file)
     height = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
     width = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
 
@@ -426,7 +432,7 @@ async def convert_video(input):
     converted_name = "kangsticker.webm"
 
     (
-        ffmpeg.input(input)
+        ffmpeg.input(input_file)
         .filter("fps", fps=30, round="up")
         .filter("scale", width=width, height=height)
         .trim(start="00:00:00", end="00:00:03", duration="3")
@@ -443,3 +449,8 @@ async def convert_video(input):
     )
 
     return converted_name
+
+
+async def convert_video(input_file):
+    from Emilia.utils.executors import run_in_thread
+    return await run_in_thread(convert_video_sync, input_file)

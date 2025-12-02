@@ -12,15 +12,25 @@ from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+from pyrogram.handlers import CallbackQueryHandler
 from telethon import errors
 from telethon.errors.rpcerrorlist import PersistentTimestampOutdatedError
 
-from Emilia import BOT_ID, LOGGER, db, pgram, telethn
+from Emilia import BOT_ID, LOGGER, db, telethn
 from Emilia.helper.chat_status import anon_admin_checker
 from Emilia.helper.get_data import GetChat
 from Emilia.mongo.connection_mongo import GetConnectedChat
+from Emilia.mongo.chats_settings_mongo import get_anon_setting_cached
 from Emilia.strings import error_messages
 
+# Rate Limit Constants
+# (requests, window_seconds)
+# Telegram Global Limit: ~30 msgs/sec
+# Per Chat/User Limit: ~1 msg/sec (sustained) or burst of ~20
+# We want to be safe but not annoying.
+RATE_LIMIT_GENERAL = (3, 5)   # 3 commands per 5 seconds (Standard)
+RATE_LIMIT_HEAVY = (1, 5)     # 1 command per 5 seconds (Heavy ops like mass actions)
+RATE_LIMIT_SUPER_HEAVY = (1, 30) # 1 command per 30 seconds (Very heavy ops)
 
 async def usage_string(message, func) -> None:
     await message.reply(
@@ -67,7 +77,7 @@ def exception(func):
                     chat_ctx = getattr(args[1].chat, "id", None)
             except Exception:
                 pass
-            LOGGER.warning(
+            LOGGER.debug(
                 f"PersistentTimestampOutdatedError encountered in {func.__name__} (chat={chat_ctx}). Will ignore and continue. Details: {e}"
             )
             # brief backoff to let client resync
@@ -388,25 +398,18 @@ async def NewMemer(client: Client, message: ChatMemberUpdated):
 message_history = {}
 
 
-def rate_limit(messages_per_window: int, window_seconds: int):
+# Redis Rate Limiting
+from Emilia import db
+redis_client = db.redis_client
+
+def rate_limit(limit_config=RATE_LIMIT_GENERAL):
     """
-    Decorator that limits the rate at which a function can be called.
-
-    Args:
-        messages_per_window (int): The maximum number of messages allowed within the time window.
-        window_seconds (int): The duration of the time window in seconds.
-
-    Returns:
-        function: The decorated function.
-
-    Example:
-        @rate_limit(40, 60)
-        async def my_function(client, message):
-            # Function implementation
+    Decorator that limits the rate at which a function can be called using Redis.
+    limit_config: Tuple of (messages_per_window, window_seconds)
     """
+    messages_per_window, window_seconds = limit_config
 
     def decorator(func):
-
         async def wrapper(*args, **kwargs):
             client = args[0]
             if is_telethon_client(client):
@@ -419,23 +422,25 @@ def rate_limit(messages_per_window: int, window_seconds: int):
                 )
 
             current_time = time.time()
+            key = f"rate_limit:{BOT_ID}:{user_id}:{func.__name__}"
 
-            if user_id not in message_history:
-                message_history[user_id] = []
+            # Redis Pipeline for atomic operations
+            pipe = redis_client.pipeline()
+            pipe.zremrangebyscore(key, 0, current_time - window_seconds)
+            pipe.zrange(key, 0, -1)
+            pipe.zadd(key, {str(current_time): current_time})
+            pipe.expire(key, window_seconds + 1)
+            results = await pipe.execute()
+            
+            # results[1] is the list of timestamps in the window (before adding current)
+            request_count = len(results[1])
 
-            message_history[user_id] = [
-                t
-                for t in message_history[user_id]
-                if current_time - t <= window_seconds
-            ]
-
-            if len(message_history[user_id]) >= messages_per_window:
+            if request_count >= messages_per_window:
                 LOGGER.warning(
                     f"Rate limit exceeded for user {user_id}. Allowed {messages_per_window} updates in {window_seconds} seconds for {func.__name__}"
                 )
                 return
 
-            message_history[user_id].append(current_time)
             await func(*args, **kwargs)
 
         return wrapper
@@ -450,7 +455,7 @@ def leavemute(func):
         try:
             return await func(client, message, *args, **kwargs)
         except ChatWriteForbidden:
-            await pgram.leave_chat(message.chat.id)
+            await client.leave_chat(message.chat.id)
             return
 
     return capture
@@ -459,22 +464,25 @@ def leavemute(func):
 callback_registry = {}
 
 
-def register_callback(func, message):
+def register_callback(func, message, client):
     callback_name = f"check_admin_callback_{func.__name__}_{message.id}"
 
     async def callback_handler(_: Client, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         chat_id = callback_query.message.chat.id
 
-        if await anon_admin_checker(chat_id, user_id):
+        if await anon_admin_checker(chat_id, user_id, client):
             await func(_, message)
             await callback_query.message.delete()
         else:
             await callback_query.answer("You are not an admin", show_alert=True)
 
-    pgram.on_callback_query(
-        filters.create(lambda _, __, query: query.data == callback_name)
-    )(callback_handler)
+    client.add_handler(
+        CallbackQueryHandler(
+            callback_handler,
+            filters.create(lambda _, __, query: query.data == callback_name)
+        )
+    )
 
     return callback_name
 
@@ -485,11 +493,15 @@ def anonadmin_checker(func):
         if message.sender_chat or (
             message.sender_chat is None and message.from_user.id == 1087968824
         ):
+            # Check if anon admin is enabled in this chat
+            if await get_anon_setting_cached(message.chat.id):
+                return await func(client, message)
+
             button = [
                 [
                     InlineKeyboardButton(
                         text="Click to prove admin",
-                        callback_data=register_callback(func, message),
+                        callback_data=register_callback(func, message, client),
                     )
                 ]
             ]

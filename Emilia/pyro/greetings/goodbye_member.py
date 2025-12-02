@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatMemberUpdated, InlineKeyboardMarkup, Message
 
-from Emilia import pgram
+
 from Emilia.helper.button_gen import button_markdown_parser
 from Emilia.helper.welcome_helper.welcome_fillings import Welcomefillings
 from Emilia.helper.welcome_helper.welcome_send_message import SendWelcomeMessage
@@ -67,7 +67,7 @@ async def goodbye_member(client: Client, message: ChatMemberUpdated):
         # If Goodbye has No any messages set
         Text = await Welcomefillings(message, DEFAUT_GOODBYE, user)
         reply_markup = None
-        GoodByeMessageSet = await pgram.send_message(
+        GoodByeMessageSet = await client.send_message(
             chat_id=chat_id,
             text=Text,
             reply_markup=reply_markup,

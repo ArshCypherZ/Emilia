@@ -9,14 +9,14 @@ from pyrogram.types import (
     Message,
 )
 
-from Emilia import pgram
+
 from Emilia.helper.get_data import GetChat
 from Emilia.mongo.rules_mongo import get_rules
 from Emilia.pyro.greetings.utils.actions import passedAction
 
 
 async def ruleCaptchaButton(
-    message: Union[Message, CallbackQuery], chat_id: int, message_id: int
+    client, message: Union[Message, CallbackQuery], chat_id: int, message_id: int
 ) -> bool:
     user_id = message.from_user.id
     KEYBOARD = InlineKeyboardMarkup(
@@ -32,10 +32,10 @@ async def ruleCaptchaButton(
 
     RULES = await get_rules(chat_id=chat_id)
     if RULES is None:
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
         RULES = f"{html.escape(chat_title)} haven't any rules yet."
 
-    await pgram.send_message(
+    await client.send_message(
         chat_id=user_id,
         text=RULES,
         reply_markup=KEYBOARD,
@@ -69,4 +69,4 @@ async def captchaRules(client: Client, callback_query: CallbackQuery):
         text="You have passed the CAPTCHA.", reply_markup=passedButton
     )
 
-    await passedAction(chat_id=chat_id, user_id=user_id, message_id=message_id)
+    await passedAction(client, chat_id=chat_id, user_id=user_id, message_id=message_id)

@@ -1,6 +1,6 @@
 # DONE: Anime Quotes
 
-import json
+
 import random
 
 from telethon import Button

@@ -12,29 +12,23 @@ from Emilia.utils.cache import SimpleCache, approvals_cache
 collection = db["approve_d"]
 
 # Precompile regex and reuse URL extractor
-_WORD_BOUNDARY = r"( |^|[^\w])"
+_WORD_BOUNDARY = r"(?: |^|$|[^\w])"
 URL_EXTRACTOR = URLExtract()
 
 # Small caches
-_blocklist_cache = SimpleCache(default_ttl=180)
+# _blocklist_cache removed in favor of centralized Redis cache in get_blocklist
 
 async def _get_blocklist_cached(chat_id: int):
-    k = f"bl:{chat_id}"
-    v = _blocklist_cache.get(k)
-    if v is not None:
-        return v
-    data = await get_blocklist(chat_id)
-    data = data or []
-    _blocklist_cache.set(k, data, ttl=180)
-    return data
+    # Directly call the centralized function which now handles L1/L2 caching + invalidation
+    return await get_blocklist(chat_id)
 
 async def _is_approved_cached(chat_id: int, user_id: int) -> bool:
     key = f"appr:{chat_id}:{user_id}"
-    val = approvals_cache.get(key)
+    val = await approvals_cache.get(key)
     if val is not None:
         return val
     is_approved = await collection.find_one({"user_id": user_id, "chat_id": chat_id}) is not None
-    approvals_cache.set(key, is_approved, ttl=180)
+    await approvals_cache.set(key, is_approved, ttl=180)
     return is_approved
 
 @Client.on_message(filters.all & filters.group, group=3)

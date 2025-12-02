@@ -1,16 +1,26 @@
 version: "3.9"
 
 services:
+  redis:
+    image: redis:alpine
+    container_name: emilia_redis
+    network_mode: host
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
   emilia:
     build: .
     image: emilia:${TAG}
     container_name: emilia
     network_mode: host # or bridge or whatever your network is
+    depends_on:
+      - redis
     pull_policy: never
   restarter:
     image: docker:cli
     volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
-    command: ["/bin/sh", "-c", "while true; do sleep 43200; docker restart emilia; done"] # restart every 12 hours
+    command: ["/bin/sh", "-c", "while true; do sleep 30000; docker restart emilia; done"] # restart every 4 hours
     restart: unless-stopped
     network_mode: host
 
@@ -18,3 +28,6 @@ networks:
   default: 
     external: true
     name: host
+
+volumes:
+  redis_data:

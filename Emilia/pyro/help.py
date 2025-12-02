@@ -6,7 +6,7 @@ from pyrogram.enums import ChatType
 from pyrogram.errors import BadRequest
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import BOT_USERNAME, custom_filter, pgram, LOGGER
+from Emilia import BOT_USERNAME, custom_filter, LOGGER
 from Emilia.data import HELPABLE, SUB_MODE
 from Emilia.helper.disable import disable
 from Emilia.helper.pagination_buttons import paginate_modules
@@ -28,7 +28,7 @@ async def help_parser(client, chat_id, text, keyboard=None):
 
 @Client.on_message(custom_filter.command(commands="help", disable=True))
 @disable
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_GENERAL)
 async def help_command(client, message):
     module_name = None
     if len(message.text.split()) >= 2:
@@ -54,7 +54,7 @@ async def help_command(client, message):
         await message.reply(text, reply_markup=buttons)
     else:
         if module_name is not None:
-            await module_page(module_name, message)
+            await module_page(client, module_name, message)
         else:
             await help_parser(client, message.chat.id, HELP_TEXT)
 
@@ -68,9 +68,9 @@ async def redirectHelp(client, message):
     ):
         if len(message.text.split()) >= 2:
             module_name = message.text.split()[1].split("_")[1]
-            await module_page(module_name, message)
+            await module_page(client, module_name, message)
         else:
-            await help_parser(pgram, message.chat.id, HELP_TEXT)
+            await help_parser(client, message.chat.id, HELP_TEXT)
 
 
 async def help_button_callback(_, __, callback_query):
@@ -117,7 +117,7 @@ async def help_button(client, callback_query):
             pass
 
 
-async def module_page(module: str, message: str = None):
+async def module_page(client, module: str, message: str = None):
     button = []
     buttons = []
     try:
@@ -140,7 +140,7 @@ async def module_page(module: str, message: str = None):
             pass
 
     except KeyError:
-        await help_parser(pgram, message.chat.id, HELP_TEXT)
+        await help_parser(client, message.chat.id, HELP_TEXT)
         return
 
     buttons.append([InlineKeyboardButton(text="Back ", callback_data="help_back")])

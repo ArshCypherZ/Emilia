@@ -22,7 +22,7 @@ async def getNote(client, message):
     if not (await isNoteExist(chat_id, note_name)):
         return await message.reply("Note not found!")
 
-    await send_note(message, note_name)
+    await send_note(client, message, note_name)
 
 
 @Client.on_message(filters.regex(pattern=(r"^#[^\s]+")))
@@ -34,10 +34,10 @@ async def regex_get_note(client, message):
     if message.from_user and message.text is not None:
         note_name = message.text.split()[0].replace("#", "")
         if await isNoteExist(chat_id, note_name):
-            await send_note(message, note_name)
+            await send_note(client, message, note_name)
 
 
-async def send_note(message: Message, note_name: str):
+async def send_note(client, message: Message, note_name: str):
     if await connection(message) is not None:
         chat_id = await connection(message)
     else:
@@ -50,16 +50,16 @@ async def send_note(message: Message, note_name: str):
             if await is_pnote_on(chat_id):
                 await PrivateNoteButton(message, chat_id, note_name)
             else:
-                await exceNoteMessageSender(message, note_name)
+                await exceNoteMessageSender(client, message, note_name)
 
         elif privateNote is not None:
             if await is_pnote_on(chat_id):
                 if privateNote:
                     await PrivateNoteButton(message, chat_id, note_name)
                 else:
-                    await exceNoteMessageSender(message, note_name)
+                    await exceNoteMessageSender(client, message, note_name)
             else:
                 if privateNote:
                     await PrivateNoteButton(message, chat_id, note_name)
                 else:
-                    await exceNoteMessageSender(message, note_name)
+                    await exceNoteMessageSender(client, message, note_name)

@@ -38,7 +38,7 @@ def get_top_result(results):
 @register(pattern="findanime", disable=True)
 @disable
 @exception
-@rate_limit(10, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def saucenao_search(event):
     """Search for an image on SauceNAO."""
     reply = await event.get_reply_message()

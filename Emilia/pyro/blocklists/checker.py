@@ -3,7 +3,7 @@ from asyncio import sleep
 
 from pyrogram.types import ChatPermissions
 
-from Emilia import pgram
+
 from Emilia.mongo.blocklists_mongo import (
     get_blocklist_reason,
     getblocklistMessageDelete,
@@ -33,7 +33,7 @@ async def blocklist_action(client, message, blocklist_word):
         return
 
     elif blocklist_mode == 2:
-        await pgram.ban_chat_member(chat_id, user_id)
+        await client.ban_chat_member(chat_id, user_id)
         await message.reply(
             (f"User {message.from_user.mention} was banned.\n" f"**Reason:**\n{reason}")
         )
@@ -44,7 +44,7 @@ async def blocklist_action(client, message, blocklist_word):
         return "BLOCKLIST_BAN", user_id, message.from_user.first_name
 
     elif blocklist_mode == 3:
-        await pgram.restrict_chat_member(
+        await client.restrict_chat_member(
             chat_id, user_id, ChatPermissions(can_send_messages=False)
         )
         await message.reply(
@@ -60,7 +60,7 @@ async def blocklist_action(client, message, blocklist_word):
         return "BLOCKLIST_MUTE", user_id, message.from_user.first_name
 
     elif blocklist_mode == 4:
-        await pgram.ban_chat_member(
+        await client.ban_chat_member(
             chat_id,
             user_id,
             # wait 60 seconds in case of server goes down at unbanning time
@@ -78,7 +78,7 @@ async def blocklist_action(client, message, blocklist_word):
 
         # Unbanning proceess and wait 5 sec to give server to kick user first
         await sleep(5)
-        await pgram.unban_chat_member(chat_id, user_id)
+        await client.unban_chat_member(chat_id, user_id)
         return "BLOCKLIST_KICK", user_id, message.from_user.first_name
 
     elif blocklist_mode == 5:
@@ -89,7 +89,7 @@ async def blocklist_action(client, message, blocklist_word):
 
     elif blocklist_mode == 6:
         until_time = int(time.time() + int(blocklist_time))
-        await pgram.ban_chat_member(
+        await client.ban_chat_member(
             chat_id=chat_id, user_id=user_id, until_date=until_time
         )
         await message.reply(
@@ -105,7 +105,7 @@ async def blocklist_action(client, message, blocklist_word):
 
     elif blocklist_mode == 7:
         until_time = int(time.time() + int(blocklist_time))
-        await pgram.restrict_chat_member(
+        await client.restrict_chat_member(
             chat_id,
             user_id,
             ChatPermissions(can_send_messages=False),

@@ -1,4 +1,4 @@
-from Emilia import pgram
+
 
 
 async def get_user_id(message):
@@ -8,7 +8,7 @@ async def get_user_id(message):
             if args.startswith("@") or (
                 args.isdigit() and (len(args) >= 5 or len(args) <= 15)
             ):
-                user_info = await pgram.get_users(user_ids=args)
+                user_info = await message._client.get_users(user_ids=args)
                 return user_info
             else:
                 user_info = message.reply_to_message.from_user
@@ -29,7 +29,7 @@ async def get_user_id(message):
             return False
 
         user = message.text.split()[1]
-        user_info = await pgram.get_users(user_ids=user)
+        user_info = await message._client.get_users(user_ids=user)
 
         return user_info
 

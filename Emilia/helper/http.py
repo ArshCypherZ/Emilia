@@ -2,6 +2,8 @@ import aiohttp
 from aiohttp import ClientSession
 from typing import Optional
 
+import orjson
+
 # Lazily initialized clients to avoid creating event-loop-bound objects at import time
 _aiohttp_session: Optional[ClientSession] = None
 
@@ -9,7 +11,11 @@ _aiohttp_session: Optional[ClientSession] = None
 async def _get_aiohttp_session() -> ClientSession:
     global _aiohttp_session
     if _aiohttp_session is None or _aiohttp_session.closed:
-        _aiohttp_session = ClientSession()
+        connector = aiohttp.TCPConnector(ttl_dns_cache=300, limit_per_host=100)
+        _aiohttp_session = ClientSession(
+            connector=connector,
+            json_serialize=lambda x: orjson.dumps(x).decode(),
+        )
     return _aiohttp_session
 
 

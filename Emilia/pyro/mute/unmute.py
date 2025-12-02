@@ -1,7 +1,7 @@
 from pyrogram import Client
 from pyrogram.types import ChatPermissions
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import CheckAllAdminsStuffs
 from Emilia.helper.get_user import get_user_id
 from Emilia.utils.decorators import *
@@ -28,7 +28,7 @@ async def ban(client, message):
     user_info = await get_user_id(message)
     user_id = user_info.id
 
-    await pgram.restrict_chat_member(chat_id, user_id, UNMUTE_PERMISSIONS)
+    await client.restrict_chat_member(chat_id, user_id, UNMUTE_PERMISSIONS)
 
     await message.reply("Alright, they can speak again.")
     return "UNMUTE", user_id, user_info.first_name

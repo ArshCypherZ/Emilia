@@ -4,17 +4,21 @@ import traceback
 from os.path import dirname
 from sys import platform
 import os
+import signal
+import time
+
 
 from pyrogram import idle
-from Emilia import LOGGER, anibot, create_indexes, pgram, IS_CLONE, telethn
+from Emilia import LOGGER, anibot, create_indexes, pgram, telethn, TOKEN
 
 from Emilia.data import HELPABLE, IMPORTED, SUB_MODE, HIDDEN_MOD, USER_INFO
 from Emilia.info import ALL_MODULES
-from Emilia.pyro.nightmode import scheduler
+from Emilia.pyro.nightmode import start_nightmode_scheduler
 from Emilia.utils.helper import j1 as helper_scheduler
 from Emilia.tele.clone import clone_start_up, shutdown_all_clones
 from Emilia.tele.backup import send as send_backup
 from Emilia.helper.http import close_http_clients
+from Emilia.mongo.users_mongo import WRITE_BUFFER
 
 
 HELP_MSG = "Click the button below to get help menu in your pm ~"
@@ -124,7 +128,7 @@ async def main():
     import_modules()
     LOGGER.info("All modules loaded.")
 
-    scheduler.start()
+    start_nightmode_scheduler(pgram)
     helper_scheduler.start()
     LOGGER.info("Schedulers started successfully.")
 
@@ -150,19 +154,36 @@ async def main():
         LOGGER.error(f"Failed to start admin cache task: {e}")
 
     try:
-        from Emilia.tele.levels import start_levels_flush_task, flush_levels_buffers_now
+        from Emilia.tele.levels import start_levels_flush_task
         asyncio.create_task(start_levels_flush_task(5.0))
         LOGGER.info("Started periodic levels buffer flusher.")
     except Exception as e:
         LOGGER.error(f"Failed to start levels flusher: {e}")
 
-    if not IS_CLONE:
-        asyncio.create_task(_delayed_backup())
-        asyncio.create_task(clone_start_up())
+    asyncio.create_task(_delayed_backup())
     
+    asyncio.create_task(WRITE_BUFFER.start())
+
+
+
     LOGGER.info("Background tasks have been started.")
     LOGGER.info("Bot is now online and ready!")
     LOGGER.info("Starting Pyrogram clients...")
+    
+    clone_task = None
+    async def delayed_clone_start():
+        try:
+            await asyncio.sleep(10)
+            await clone_start_up()
+        except asyncio.CancelledError:
+            LOGGER.info("Clone startup task cancelled during shutdown")
+            raise
+        except Exception as e:
+            LOGGER.error(f"Clone startup failed: {e}")
+    
+    clone_task = asyncio.create_task(delayed_clone_start())
+    
+    
     await asyncio.gather(start_pgram(), start_anibot())
     LOGGER.info("Pyrogram clients exited.")
 
@@ -172,22 +193,45 @@ async def main():
     except Exception as e:
         LOGGER.error(f"Error flushing levels buffers on shutdown: {e}")
 
+    try:
+        await WRITE_BUFFER.stop()
+    except Exception as e:
+        LOGGER.error(f"Error flushing WriteBuffer on shutdown: {e}")
+
 
 if __name__ == "__main__":
+    loop = None
+    shutdown_event = asyncio.Event()
+    
+    def signal_handler(sig, frame):
+        LOGGER.info(f"Received signal {sig}, initiating shutdown...")
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(shutdown_event.set)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     try:
-        asyncio.get_event_loop().run_until_complete(main())
-
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
-        LOGGER.error("Bot stopped via KeyboardInterrupt.")
+        LOGGER.info("Bot stopped via KeyboardInterrupt.")
     except Exception:
         err = traceback.format_exc()
         LOGGER.error(err)
     finally:
-        if not IS_CLONE:
-            try:
-                asyncio.run(shutdown_all_clones())
-            except Exception as e:
-                LOGGER.error(f"Error shutting down clone clients: {e}")
+        if loop and not loop.is_closed():
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(asyncio.sleep(0.1))
+        
+        try:
+            asyncio.run(shutdown_all_clones())
+        except Exception as e:
+            LOGGER.error(f"Error shutting down clone clients: {e}")
         try:
             from Emilia.tele.chatbot import shutdown_chatbot
             asyncio.run(shutdown_chatbot())
@@ -198,4 +242,18 @@ if __name__ == "__main__":
             asyncio.run(close_http_clients())
         except Exception as e:
             LOGGER.error(f"Error closing helper HTTP clients: {e}")
+        
+        try:
+            from Emilia.utils.cache import locks_cache, admin_cache, blocklist_cache, anonymous_admin_cache, approvals_cache
+            async def stop_caches():
+                await locks_cache.stop()
+                await admin_cache.stop()
+                await blocklist_cache.stop()
+                await anonymous_admin_cache.stop()
+                await approvals_cache.stop()
+            
+            loop.run_until_complete(stop_caches())
+        except Exception as e:
+             LOGGER.error(f"Error stopping caches: {e}")
+
         LOGGER.info("Stopped Services.")

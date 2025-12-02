@@ -5,7 +5,7 @@ from captcha.image import ImageCaptcha
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from Emilia import BOT_USERNAME, pgram
+from Emilia import BOT_USERNAME
 from Emilia.helper.chat_status import isUserAdmin
 from Emilia.mongo.welcome_mongo import (
     CaptchaChanceUpdater,
@@ -50,7 +50,7 @@ async def textCaptcha(chat_id, user_id):
         return Captcha_button
 
 
-async def textCaptchaRedirect(message):
+async def textCaptchaRedirect(client, message):
     user_id = message.from_user.id
     message.chat.id
     _match = message.text.split()[1].split("_")[1]
@@ -115,6 +115,7 @@ async def textCaptchaRedirect(message):
                     chat_id=new_chat_id, user_id=new_user_id
                 )
                 await failedAction(
+                    client,
                     message=message,
                     user_id=new_user_id,
                     chat_id=new_chat_id,
@@ -131,7 +132,7 @@ async def textCaptchaRedirect(message):
             )
             keyboard = ButtonGen(CaptchaStringList, new_chat_id)
 
-            await pgram.send_photo(
+            await client.send_photo(
                 chat_id=new_user_id,
                 photo=CaptchaLoc,
                 caption=CAPTCHA_START_STRINGS[chance],
@@ -167,14 +168,14 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
     if not (await isReCaptcha(chat_id=chat_id)) and (
         await isUserVerified(chat_id=chat_id, user_id=user_id)
     ):
-        await pgram.edit_message_caption(
+        await client.edit_message_caption(
             chat_id=user_id,
             message_id=callback_query.message.id,
             caption="You've already completed the CAPTCHA!",
         )
 
     if (await GetUserCaptchaMessageIDs(chat_id=chat_id, user_id=user_id)) is None:
-        await pgram.edit_message_caption(
+        await client.edit_message_caption(
             chat_id=user_id,
             message_id=callback_query.message.id,
             caption="Something went wrong, try agian.",
@@ -189,6 +190,7 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
     if chances >= 2:
         await callback_query.edit_message_caption(caption="You failed this captcha")
         await failedAction(
+            client,
             message=callback_query,
             user_id=user_id,
             chat_id=chat_id,
@@ -200,7 +202,7 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
         chances += 1
         await CaptchaChanceUpdater(chat_id, user_id, chances)
 
-        await pgram.edit_message_caption(
+        await client.edit_message_caption(
             chat_id=user_id,
             message_id=callback_query.message.id,
             caption=CAPTCHA_START_STRINGS[chances],
@@ -212,11 +214,11 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
     # When use click on correct CAPTCHA button
     elif RandomString == correct_captcha:
         if await isRuleCaptcha(chat_id=chat_id):
-            await pgram.delete_messages(
+            await client.delete_messages(
                 chat_id=user_id, message_ids=callback_query.message.id
             )
             await ruleCaptchaButton(
-                message=callback_query, chat_id=chat_id, message_id=message_id
+                client, message=callback_query, chat_id=chat_id, message_id=message_id
             )
         else:
             str_chat_id = str(chat_id).replace("-100", "")
@@ -231,7 +233,7 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
                 ]
             )
 
-            await pgram.edit_message_caption(
+            await client.edit_message_caption(
                 chat_id=user_id,
                 message_id=callback_query.message.id,
                 caption="you passed the captcha.",
@@ -240,4 +242,4 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
 
             await callback_query.answer(text=("You have passed the CAPTCHA."))
 
-            await passedAction(chat_id=chat_id, user_id=user_id, message_id=message_id)
+            await passedAction(client, chat_id=chat_id, user_id=user_id, message_id=message_id)

@@ -5,7 +5,7 @@ from pyrogram import Client, enums, filters
 from pyrogram.types import ChatPermissions, Message
 
 import Emilia.strings as strings
-from Emilia import custom_filter, db, pgram, LOGGER
+from Emilia import custom_filter, db, LOGGER
 from Emilia.helper.chat_status import isBotCan, isUserAdmin
 from Emilia.helper.time_checker import *
 from Emilia.pyro.connection.connection import connection
@@ -14,6 +14,7 @@ from Emilia.utils.cache import SimpleCache, approvals_cache
 
 DB = db.antiflood_chats
 collection = db.flood_msgs
+FLOOD_LOCK = set()
 
 async def flood_limits(chat_id: int):
     limit = await DB.find_one({"chat_id": chat_id})
@@ -34,21 +35,21 @@ _flood_status_cache = SimpleCache(default_ttl=60)
 
 async def _check_flood_on_cached(chat_id: int) -> bool:
     k = f"flood_on:{chat_id}"
-    v = _flood_status_cache.get(k)
+    v = await _flood_status_cache.get(k)
     if v is not None:
         return v
     meow = await DB.find_one({"chat_id": chat_id})
     on = bool(meow and "status" in meow and meow["status"] != "off")
-    _flood_status_cache.set(k, on, ttl=60)
+    await _flood_status_cache.set(k, on, ttl=60)
     return on
 
 async def _is_approved_cached(chat_id: int, user_id: int) -> bool:
     key = f"appr:{chat_id}:{user_id}"
-    val = approvals_cache.get(key)
+    val = await approvals_cache.get(key)
     if val is not None:
         return val
     is_approved = await db["approve_d"].find_one({"user_id": user_id, "chat_id": chat_id}) is not None
-    approvals_cache.set(key, is_approved, ttl=180)
+    await approvals_cache.set(key, is_approved, ttl=180)
     return is_approved
 
 async def check_flood_on(chat_id: int):
@@ -120,7 +121,7 @@ async def setfloodtimer(client, message):
 
     await DB.update_one(
         {"chat_id": chat_id},
-        {"$set": {"timed_limit": int(count), "timed_duration": int(duration)}},
+        {"$set": {"timed_limit": int(count), "timed_duration": int(duration), "timed_status": "on"}},
         upsert=True,
     )
     await message.reply(
@@ -208,6 +209,7 @@ async def antiflood_func(client, message: Message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "on"}}, upsert=True
         )
+        await _flood_status_cache.set(f"flood_on:{chat_id}", True, ttl=60)
         await message.reply(
             "Antiflood is now enabled in this chat. Default limit is 10."
         )
@@ -216,6 +218,7 @@ async def antiflood_func(client, message: Message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
+        await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
         await message.reply("Antiflood is now disabled in this chat.")
         return "DISABLED_ANTIFLOOD", None, None
     elif status.isdigit():
@@ -228,6 +231,7 @@ async def antiflood_func(client, message: Message):
                 {"$set": {"limit": status, "status": "on"}},
                 upsert=True,
             )
+            await _flood_status_cache.set(f"flood_on:{chat_id}", True, ttl=60)
             await message.reply(f"Antiflood limit is now set to {status} in this chat.")
             return "NEW_FLOOD_LIMIT", None, None
     else:
@@ -367,7 +371,10 @@ async def clearflood(client, message):
     return f"SET_CLEAR_FLOOD", None, None
 
 
-async def handle_flood(message, user_id: int, chat_id: int):
+async def handle_flood(client, message, user_id: int, chat_id: int):
+    if user_id in FLOOD_LOCK:
+        return
+    
     settings = await DB.find_one({"chat_id": chat_id})
     if not settings:
         return
@@ -386,118 +393,132 @@ async def handle_flood(message, user_id: int, chat_id: int):
             {
                 "user_id": user_id,
                 "chat_id": chat_id,
-                "msg_id": {"$gte": start_time.timestamp()},
+                "timestamp": {"$gte": start_time.timestamp()},
             }
         )
-        if count >= timed_limit:
-            if action == "ban":
-                await pgram.ban_chat_member(chat_id, user_id)
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been banned for spamming."
-                )
-            elif action == "mute":
-                await pgram.restrict_chat_member(
-                    chat_id,
-                    user_id,
-                    permissions=ChatPermissions(can_send_messages=False),
-                )
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been muted for spamming."
-                )
-            elif action == "kick":
-                await pgram.ban_chat_member(chat_id, user_id)
-                await pgram.unban_chat_member(chat_id, user_id)
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been kicked for spamming."
-                )
-            elif action == "tban":
-                time = settings.get("time")
-                time_value = await time_converter(message, time)
-                await pgram.ban_chat_member(chat_id, user_id, until_date=time_value)
-                await pgram.send_message(
-                    chat_id,
-                    f"{firstname} has been temporarily banned ({time}) for spamming.",
-                )
-            elif action == "tmute":
-                time = settings.get("time")
-                time_value = await time_converter(message, time)
-                await pgram.restrict_chat_member(
-                    chat_id,
-                    user_id,
-                    permissions=ChatPermissions(can_send_messages=False),
-                    until_date=time_value,
-                )
-                await pgram.send_message(
-                    chat_id,
-                    f"{firstname} has been temporarily muted ({time}) for spamming.",
-                )
+        if count == timed_limit:
+            FLOOD_LOCK.add(user_id)
+            try:
+                if action == "ban":
+                    await client.ban_chat_member(chat_id, user_id)
+                    await client.send_message(
+                        chat_id, f"{firstname} has been banned for spamming."
+                    )
+                elif action == "mute":
+                    await client.restrict_chat_member(
+                        chat_id,
+                        user_id,
+                        permissions=ChatPermissions(can_send_messages=False),
+                    )
+                    await client.send_message(
+                        chat_id, f"{firstname} has been muted for spamming."
+                    )
+                elif action == "kick":
+                    await client.ban_chat_member(chat_id, user_id)
+                    await client.unban_chat_member(chat_id, user_id)
+                    await client.send_message(
+                        chat_id, f"{firstname} has been kicked for spamming."
+                    )
+                elif action == "tban":
+                    time = settings.get("time")
+                    time_value = await time_converter(message, time)
+                    await client.ban_chat_member(chat_id, user_id, until_date=time_value)
+                    await client.send_message(
+                        chat_id,
+                        f"{firstname} has been temporarily banned ({time}) for spamming.",
+                    )
+                elif action == "tmute":
+                    time = settings.get("time")
+                    time_value = await time_converter(message, time)
+                    await client.restrict_chat_member(
+                        chat_id,
+                        user_id,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=time_value,
+                    )
+                    await client.send_message(
+                        chat_id,
+                        f"{firstname} has been temporarily muted ({time}) for spamming.",
+                    )
 
-            if clear_flood in ["yes", "on"]:
-                async for doc in collection.find(
-                    {"user_id": user_id, "chat_id": chat_id}
-                ):
-                    try:
-                        await pgram.delete_messages(chat_id, doc["msg_id"])
-                    except Exception as e:
-                        LOGGER.warning(f"antiflood: failed to delete flood msg {doc.get('msg_id')} in {chat_id}: {e}")
-            await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
+                if clear_flood in ["yes", "on"]:
+                    msg_ids = []
+                    async for doc in collection.find({"user_id": user_id, "chat_id": chat_id}):
+                        mid = doc["msg_id"]
+                        if isinstance(mid, int):
+                            msg_ids.append(mid)
+                    if msg_ids:
+                        try:
+                            await client.delete_messages(chat_id, msg_ids)
+                        except Exception as e:
+                            LOGGER.warning(f"antiflood: failed to delete flood msgs in {chat_id}: {e}")
+                    await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
+            finally:
+                FLOOD_LOCK.discard(user_id)
     else:
         counter = await collection.count_documents(
             {"user_id": user_id, "chat_id": chat_id}
         )
-        if counter >= limit:
-            if action == "ban":
-                await pgram.ban_chat_member(chat_id, user_id)
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been banned for spamming."
-                )
-            elif action == "mute":
-                await pgram.restrict_chat_member(
-                    chat_id,
-                    user_id,
-                    permissions=ChatPermissions(can_send_messages=False),
-                )
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been muted for spamming."
-                )
-            elif action == "kick":
-                await pgram.ban_chat_member(chat_id, user_id)
-                await pgram.unban_chat_member(chat_id, user_id)
-                await pgram.send_message(
-                    chat_id, f"{firstname} has been kicked for spamming."
-                )
-            elif action == "tban":
-                time = settings.get("time")
-                time_value = await time_converter(message, time)
-                await pgram.ban_chat_member(chat_id, user_id, until_date=time_value)
-                await pgram.send_message(
-                    chat_id,
-                    f"{firstname} has been temporarily banned ({time}) for spamming.",
-                )
-            elif action == "tmute":
-                time = settings.get("time")
-                time_value = await time_converter(message, time)
-                await pgram.restrict_chat_member(
-                    chat_id,
-                    user_id,
-                    permissions=ChatPermissions(can_send_messages=False),
-                    until_date=time_value,
-                )
-                await pgram.send_message(
-                    chat_id,
-                    f"{firstname} has been temporarily muted ({time}) for spamming.",
-                )
-            await sleep(5)
+        if counter == limit:
+            FLOOD_LOCK.add(user_id)
+            try:
+                if action == "ban":
+                    await client.ban_chat_member(chat_id, user_id)
+                    await client.send_message(
+                        chat_id, f"{firstname} has been banned for spamming."
+                    )
+                elif action == "mute":
+                    await client.restrict_chat_member(
+                        chat_id,
+                        user_id,
+                        permissions=ChatPermissions(can_send_messages=False),
+                    )
+                    await client.send_message(
+                        chat_id, f"{firstname} has been muted for spamming."
+                    )
+                elif action == "kick":
+                    await client.ban_chat_member(chat_id, user_id)
+                    await client.unban_chat_member(chat_id, user_id)
+                    await client.send_message(
+                        chat_id, f"{firstname} has been kicked for spamming."
+                    )
+                elif action == "tban":
+                    time = settings.get("time")
+                    time_value = await time_converter(message, time)
+                    await client.ban_chat_member(chat_id, user_id, until_date=time_value)
+                    await client.send_message(
+                        chat_id,
+                        f"{firstname} has been temporarily banned ({time}) for spamming.",
+                    )
+                elif action == "tmute":
+                    time = settings.get("time")
+                    time_value = await time_converter(message, time)
+                    await client.restrict_chat_member(
+                        chat_id,
+                        user_id,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=time_value,
+                    )
+                    await client.send_message(
+                        chat_id,
+                        f"{firstname} has been temporarily muted ({time}) for spamming.",
+                    )
+                await sleep(5)
 
-            if clear_flood in ["yes", "on"]:
-                async for doc in collection.find(
-                    {"user_id": user_id, "chat_id": chat_id}
-                ):
-                    try:
-                        await pgram.delete_messages(chat_id, doc["msg_id"])
-                    except Exception as e:
-                        LOGGER.warning(f"antiflood: failed to delete flood msg {doc.get('msg_id')} in {chat_id}: {e}")
-            await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
+                if clear_flood in ["yes", "on"]:
+                    msg_ids = []
+                    async for doc in collection.find({"user_id": user_id, "chat_id": chat_id}):
+                        mid = doc["msg_id"]
+                        if isinstance(mid, int):
+                            msg_ids.append(mid)
+                    if msg_ids:
+                        try:
+                            await client.delete_messages(chat_id, msg_ids)
+                        except Exception as e:
+                            LOGGER.warning(f"antiflood: failed to delete flood msgs in {chat_id}: {e}")
+                    await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
+            finally:
+                FLOOD_LOCK.discard(user_id)
 
 approve_collection = db["approve_d"]
 
@@ -517,21 +538,39 @@ async def handle_message(client, message):
     if not await _check_flood_on_cached(chat_id):
         return
     
+    chat_settings = await DB.find_one({"chat_id": chat_id})
+    last_user = chat_settings.get("last_user_id") if chat_settings else None
+    
     if await _is_approved_cached(chat_id, user_id):
+        if last_user and last_user != user_id:
+            await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
+        await DB.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"last_user_id": user_id}},
+            upsert=True
+        )
         return
 
-    last_msg = await collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}, sort=[("msg_id", -1)]
+    if await isUserAdmin(message, silent=True):
+        if last_user and last_user != user_id:
+            await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
+        await DB.update_one(
+            {"chat_id": chat_id},
+            {"$set": {"last_user_id": user_id}},
+            upsert=True
+        )
+        return
+
+    if last_user and last_user != user_id:
+        await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
+    
+    await DB.update_one(
+        {"chat_id": chat_id},
+        {"$set": {"last_user_id": user_id}},
+        upsert=True
     )
-    if not last_msg:
-        await collection.insert_one(
-            {"user_id": user_id, "chat_id": chat_id, "msg_id": msg_id}
-        )
-    elif last_msg["msg_id"] == msg_id - 1:
-        await collection.insert_one(
-            {"user_id": user_id, "chat_id": chat_id, "msg_id": msg_id}
-        )
-        await sleep(0.5)
-        await handle_flood(message, user_id, chat_id)
-    else:
-        await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
+
+    await collection.insert_one(
+        {"user_id": user_id, "chat_id": chat_id, "msg_id": msg_id, "timestamp": datetime.now().timestamp(), "date": datetime.utcnow()}
+    )
+    await handle_flood(client, message, user_id, chat_id)

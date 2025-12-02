@@ -18,7 +18,7 @@ async def lock_db(chat_id, lock_item):
         {"$addToSet": {"locked": lock_item}},
     )
     # Clear cache after modification
-    locks_cache.delete(f"get_locks:({chat_id},):{{}}")
+    await locks_cache.delete(f"get_locks:({chat_id},):{{}}")
 
 
 @cached_db_call(locks_cache, ttl=120)
@@ -30,7 +30,7 @@ async def get_locks(chat_id) -> list:
 async def unlock_db(chat_id, locked_item):
     await locks.update_one({"chat_id": chat_id}, {"$pull": {"locked": locked_item}})
     # Clear cache after modification
-    locks_cache.delete(f"get_locks:({chat_id},):{{}}")
+    await locks_cache.delete(f"get_locks:({chat_id},):{{}}")
 
 
 async def lockwarns_db(chat_id) -> bool:

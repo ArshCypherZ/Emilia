@@ -41,21 +41,22 @@ _periodic_flush_started = False
 
 async def _get_level_on(chat_id: int) -> bool:
     key = f"lvl:{chat_id}"
-    val = _level_cache.get(key)
+    val = await _level_cache.get(key)
     if val is not None:
         return val
-    exists = await level.find_one({"chat_id": chat_id}) is not None
-    _level_cache.set(key, exists, ttl=120)
+    doc = await level.find_one({"chat_id": chat_id})
+    exists = doc is not None and not doc.get("disabled", False)
+    await _level_cache.set(key, exists, ttl=120)
     return exists
 
 async def _get_first_name(user_id: int) -> str:
     key = f"name:{user_id}"
-    val = _name_cache.get(key)
+    val = await _name_cache.get(key)
     if val is not None:
         return val
     doc = await first_name.find_one({"user_id": user_id})
     name = (doc or {}).get("first_name", "Unknown")
-    _name_cache.set(key, name, ttl=300)
+    await _name_cache.set(key, name, ttl=300)
     return name
 
 async def _flush_points_and_lastmsg():
@@ -270,7 +271,7 @@ async def _daily(event):
         return await event.reply(
             "You can only claim your daily bonus of 100 points inside a group chat!"
         )
-    if not await level.find_one({"chat_id": event.chat_id}):
+    if not await _get_level_on(event.chat_id):
         return await event.reply(
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
@@ -340,7 +341,7 @@ async def _daily(event):
         return await event.reply(
             "You can only claim your daily bonus of 500 points inside a group chat!"
         )
-    if not await level.find_one({"chat_id": event.chat_id}):
+    if not await _get_level_on(event.chat_id):
         return await event.reply(
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
@@ -378,7 +379,7 @@ async def userstats(event):
         return await event.reply(
             "You can only see your rank inside a specific group chat."
         )
-    if not await level.find_one({"chat_id": event.chat_id}):
+    if not await _get_level_on(event.chat_id):
         return await event.reply(
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
@@ -405,7 +406,7 @@ async def register_(event):
         return await event.reply(
             "Please register inside a group, each group will have it's seperate rankings."
         )
-    if not await level.find_one({"chat_id": event.chat_id}):
+    if not await _get_level_on(event.chat_id):
         return await event.reply(
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
@@ -537,30 +538,37 @@ async def levelonoff(event):
     if not await is_admin(event, event.sender_id):
         return
 
+    key = f"lvl:{event.chat_id}"
     check = event.text.split()
     try:
         if check[1] in ON_ARG:
-            if await level.find_one({"chat_id": event.chat_id}):
+            doc = await level.find_one({"chat_id": event.chat_id})
+            if doc and not doc.get("disabled", False):
                 return await event.reply(
                     "Level System is already enabled in this chat."
                 )
-            # Idempotent enable using upsert
-            await level.update_one({"chat_id": event.chat_id}, {"$setOnInsert": {"chat_id": event.chat_id}}, upsert=True)
+            # Enable by unsetting disabled flag, or upsert if not present
+            await level.update_one({"chat_id": event.chat_id}, {"$set": {"chat_id": event.chat_id}, "$unset": {"disabled": ""}}, upsert=True)
+            await _level_cache.set(key, True, ttl=120)
             await event.reply("Level System Enabled.")
             return "LEVEL_ON", None, None
         elif check[1] in OFF_ARG:
-            if not await level.find_one({"chat_id": event.chat_id}):
+            doc = await level.find_one({"chat_id": event.chat_id})
+            if not doc or doc.get("disabled", False):
                 return await event.reply(
                     "Level System is already disabled in this chat."
                 )
-            await level.delete_one({"chat_id": event.chat_id})
+            # Instead of deleting, just mark as disabled
+            await level.update_one({"chat_id": event.chat_id}, {"$set": {"disabled": True}}, upsert=True)
+            await _level_cache.set(key, False, ttl=120)
             await event.reply("Level System Disabled.")
             return "LEVEL_OFF", None, None
         else:
             await event.reply("Invalid Argument.")
             return
     except IndexError:
-        if await level.find_one({"chat_id": event.chat_id}):
+        doc = await level.find_one({"chat_id": event.chat_id})
+        if doc and not doc.get("disabled", False):
             await event.reply("Level System in enabled in this chat.")
         else:
             await event.reply("Level System in disabled in this chat.")

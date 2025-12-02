@@ -44,3 +44,5 @@ mutagen
 # performance
 cryptg
 TgCrypto
+redis>=5.0.0
+orjson

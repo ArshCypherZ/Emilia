@@ -220,11 +220,16 @@ async def _quotly_api_(e):
     try:
         fq = req.json()["result"]["image"]
         buffer = base64.b64decode(fq.encode("utf-8"))
-        (
-            open("gay.png", "wb").write(buffer)
-            if photo
-            else open("gay.webp", "wb").write(buffer)
-        )
+        from Emilia.utils.executors import run_in_thread
+
+        def write_file_sync(path, data):
+            with open(path, "wb") as f:
+                f.write(data)
+
+        if photo:
+            await run_in_thread(write_file_sync, "gay.png", buffer)
+        else:
+            await run_in_thread(write_file_sync, "gay.webp", buffer)
 
         if photo:
             qs = await e.respond(file="gay.png", force_document=photo, buttons=buttons)

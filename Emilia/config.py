@@ -1,11 +1,10 @@
-import json
+import orjson
 import os
 
 
 def get_user_list(config, key):
-    with open("{}/Emilia/{}".format(os.getcwd(), config), "r") as json_file:
-        return json.load(json_file)[key]
-
+    with open("{}/Emilia/{}".format(os.getcwd(), config), "rb") as json_file:
+        return orjson.loads(json_file.read())[key]
 
 class Config(object):
     API_HASH = "45aabfac" # API_HASH from my.telegram.org
@@ -22,6 +21,9 @@ class Config(object):
     DEV_USERS = [6040984893, 6461051572, 7107018652] # Dev Users
     TOKEN = "57375" # Bot Token from @BotFather
     CLONE_LIMIT = 50 # Number of clones your bot can make
+
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
     EVENT_LOGS = -10093 # Event Logs Chat ID
     OWNER_ID = 6040984893 # Owner ID

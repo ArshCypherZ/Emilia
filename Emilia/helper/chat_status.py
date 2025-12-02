@@ -7,7 +7,7 @@ from pyrogram.enums import ChatMemberStatus, ChatType
 from pyrogram.errors import BadRequest
 from pyrogram.types import Message
 
-from Emilia import BOT_ID, DEV_USERS, pgram
+from Emilia import BOT_ID, DEV_USERS
 
 BOT_PERMISSIONS_STRINGS = {
     "can_delete_messages": "Looks like I haven't got the right to delete messages; mind promoting me? Thanks!",
@@ -50,7 +50,7 @@ async def isBotAdmin(message: Message, chat_id=None, silent=False) -> bool:
     if chat_id is None:
         chat_id = message.chat.id
 
-    GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
+    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
 
     if GetData.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         if not silent:
@@ -99,7 +99,7 @@ async def isUserAdmin(
 
     global GetData
     try:
-        GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=user_id)
+        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
     except BadRequest:
         return
 
@@ -111,13 +111,13 @@ async def isUserAdmin(
         return False
 
 
-async def anon_admin_checker(chat_id: int, user_id: int) -> bool:
+async def anon_admin_checker(chat_id: int, user_id: int, client) -> bool:
     """This function returns user_id chat status
 
     Returns:
         bool: True when user_id has chat status is admin | creator of chat.
     """
-    GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=user_id)
+    GetData = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
     if GetData.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         return False
     else:
@@ -136,7 +136,7 @@ async def can_restrict_member(
         chat_id = message.chat.id
 
     try:
-        GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=user_id)
+        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
     except BaseException:
         return True
 
@@ -173,7 +173,7 @@ async def isUserCreator(
         if message.chat.type == ChatType.PRIVATE:
             return True
 
-    GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=user_id)
+    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
 
     if GetData.status == ChatMemberStatus.OWNER:
         return True
@@ -201,7 +201,7 @@ async def isBotCan(
     if chat_id is None:
         chat_id = message.chat.id
 
-    GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
+    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
     if GetData.privileges:
         return True
     else:
@@ -239,7 +239,7 @@ async def isUserCan(
 
     global GetData
     try:
-        GetData = await pgram.get_chat_member(chat_id=chat_id, user_id=user_id)
+        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
     except BadRequest:
         return
 
@@ -262,7 +262,7 @@ async def CheckAllAdminsStuffs(
     Args:
         message (Message): Message
         privileges (Union[str, List[str]], optional): pass permission list or str. Defaults to 'can_change_info'.
-        silent (bool, optional): if True bot will remain silent in chat. Defaults to False.
+        silent (bool, optional): if True bot will be silent in chat. Defaults to False.
 
     Returns:
         bool: True when user and bot both has chat status is admin.
@@ -350,7 +350,7 @@ async def CheckAdmins(message: Message, silent: bool = False) -> bool:
     return True
 
 
-async def isUserBanned(chat_id: int, user_id: int) -> bool:
+async def isUserBanned(chat_id: int, user_id: int, client) -> bool:
     """This function check is user is banned in this given chat or not.
 
     Args:
@@ -360,7 +360,7 @@ async def isUserBanned(chat_id: int, user_id: int) -> bool:
     Returns:
         bool: True when user is banned in the given chat.
     """
-    data_list = pgram.get_chat_members(
+    data_list = client.get_chat_members(
         chat_id=chat_id, filter=enums.ChatMembersFilter.BANNED
     )
     async for user in data_list:

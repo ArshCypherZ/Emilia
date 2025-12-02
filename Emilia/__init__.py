@@ -1,6 +1,8 @@
 import logging
 import os
 import sys
+import json
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from motor import motor_asyncio
@@ -9,14 +11,27 @@ from telethon import TelegramClient
 
 from Emilia.config import Development as Config
 
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "name": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
 def _setup_emilia_logging():
     # If root has no handlers yet, configure it at INFO with console+file
     if not logging.getLogger().handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JSONFormatter())
         logging.basicConfig(
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             level=logging.INFO,
             handlers=[
-                logging.StreamHandler(sys.stdout),
+                handler,
                 logging.FileHandler("log.txt"),
             ],
         )
@@ -29,7 +44,7 @@ def _setup_emilia_logging():
     if not has_console:
         sh = logging.StreamHandler(sys.stdout)
         sh.setLevel(logging.INFO)
-        sh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        sh.setFormatter(JSONFormatter())
         logger.addHandler(sh)
 
     # Avoid duplicate lines if root also has handlers
@@ -38,11 +53,10 @@ def _setup_emilia_logging():
 
 LOGGER = _setup_emilia_logging()
 
-IS_CLONE = os.environ.get("EMILIA_IS_CLONE", "false").lower() == "true"
 TOKEN = os.environ.get("EMILIA_TOKEN", Config.TOKEN)
 OWNER_ID = int(os.environ.get("EMILIA_OWNER_ID", Config.OWNER_ID))
 
-SESSION_NAME = f"emilia_clone_{OWNER_ID}" if IS_CLONE else "emilia_main"
+SESSION_NAME = "emilia_main"
 
 DEV_USERS = {int(x) for x in Config.DEV_USERS or []}
 EVENT_LOGS = Config.EVENT_LOGS
@@ -139,17 +153,21 @@ LOGGER.info("[Emilia] Emilia Is Starting. | Spiral Tech Project | Licensed Under
 plugins = dict(root="Emilia/anime")
 pyro_plugins = dict(root="Emilia/pyro")
 
-mongo = motor_asyncio.AsyncIOMotorClient(MONGO_DB_URL)
+mongo = motor_asyncio.AsyncIOMotorClient(MONGO_DB_URL, minPoolSize=10, maxPoolSize=100)
 db = mongo["Emilia"]
 
+import redis.asyncio as redis
+redis_client = redis.from_url(Config.REDIS_URL, decode_responses=True)
+db.redis_client = redis_client
+
 # Initialize clients
-if not IS_CLONE:
-    pgram = Client(name=SESSION_NAME, api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, workers=32, plugins=pyro_plugins, sleep_threshold=0)
-else:
-    pgram = Client(name=SESSION_NAME, api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, plugins=pyro_plugins)
+pgram = Client(name=SESSION_NAME, api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, workers=32, plugins=pyro_plugins, sleep_threshold=0)
+pgram.is_clone = False
+pgram.owner_id = OWNER_ID
 
 anibot = Client(name=f"{SESSION_NAME}_anibot", api_id=API_ID, api_hash=API_HASH, bot_token=TOKEN, sleep_threshold=0, plugins=plugins)
 telethn = TelegramClient(f"{SESSION_NAME}_tele", API_ID, API_HASH).start(bot_token=TOKEN)
+telethn.is_clone = False
 
 
 async def create_indexes():
@@ -235,6 +253,8 @@ async def create_indexes():
     await ensure_unique(chats, [("chat_id", 1)], name="chat_id_1")
     await chats.create_index([("first_found_date", 1)])
     await flood_msgs.create_index([("chat_id", 1), ("user_id", 1), ("msg_id", 1)])
+    # TTL Index for flood_msgs (expire after 1 hour)
+    await flood_msgs.create_index([("date", 1)], expireAfterSeconds=3600)
 
     # Features (single-doc-per-chat)
     await ensure_unique(locks, [("chat_id", 1)], name="chat_id_1")
@@ -306,5 +326,9 @@ async def create_indexes():
 
     # Approvals invariant: single record per (chat_id, user_id)
     await ensure_unique(approve_d, [("chat_id", 1), ("user_id", 1)], name="uniq_approve_chat_user")
+
+    # Clone broadcast tracking via bot_ids array in users/chats
+    await users.create_index([("bot_ids", 1)])
+    await chats.create_index([("bot_ids", 1)])
 
     LOGGER.info("Database indexes created successfully.")

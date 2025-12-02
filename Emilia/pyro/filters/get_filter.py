@@ -32,7 +32,7 @@ async def FilterCheckker(client, message):
 
         pattern = r"( |^|[^\w])" + re.escape(filter_) + r"( |$|[^\w])"
         if re.search(pattern, text, flags=re.IGNORECASE):
-            filter_name, content, text, data_type = await get_filter(chat_id, filter_)
+            filter_name, content, text, data_type, reply_to_sender = await get_filter(chat_id, filter_)
             await SendFilterMessage(
                 client,
                 message,
@@ -40,4 +40,5 @@ async def FilterCheckker(client, message):
                 content=content,
                 text=text,
                 data_type=data_type,
+                reply_to_sender=reply_to_sender,
             )

@@ -36,23 +36,35 @@ async def add_blocklist_db(chat_id, blocklist_text, blocklist_reason):
         {"chat_id": chat_id, "blocklist_text.blocklist_text": blocklist_text},
         {"$set": {"blocklist_text.$.blocklist_reason": blocklist_reason}},
     )
+    # Invalidate cache
+    await blocklist_cache.delete(f"bl:{chat_id}")
 
 
 async def rmblocklist_db(chat_id, blocklist_name):
     await blocklists.update_one(
         {"chat_id": chat_id}, {"$pull": {"blocklist_text": {"blocklist_text": blocklist_name}}}
     )
+    # Invalidate cache
+    await blocklist_cache.delete(f"bl:{chat_id}")
 
 
 async def unblocklistall_db(chat_id):
     await blocklists.update_one({"chat_id": chat_id}, {"$set": {"blocklist_text": []}}, upsert=True)
+    # Invalidate cache
+    await blocklist_cache.delete(f"bl:{chat_id}")
 
 
-@cached_db_call(blocklist_cache, ttl=180)
 async def get_blocklist(chat_id) -> list:
+    key = f"bl:{chat_id}"
+    cached = await blocklist_cache.get(key)
+    if cached is not None:
+        return cached
+
     doc = await blocklists.find_one({"chat_id": chat_id}, {"_id": 0, "blocklist_text": 1})
-    if doc is not None:
-        return doc.get("blocklist_text", [])
+    data = doc.get("blocklist_text", []) if doc else []
+    
+    await blocklist_cache.set(key, data, ttl=180)
+    return data
 
 
 async def get_blocklist_reason(chat_id, blocklist_text):

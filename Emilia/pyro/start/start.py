@@ -33,12 +33,16 @@ Use the buttons buttons or /help to checkout even more!
 
 @Client.on_message(custom_filter.command(commands="start"))
 @leavemute
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_GENERAL)
 async def starttt(client, message):
     if len(message.text.split()) == 1:
         if message.chat.type == ChatType.PRIVATE:
-            # Get the current bot's ID from its token to determine which start picture to use
+            from Emilia.mongo.users_mongo import add_user
+            
             current_bot_id = int(client.bot_token.split(":")[0])
+            
+            if getattr(client, "is_clone", False):
+                await add_user(message.from_user.id, message.from_user.username, bot_id=current_bot_id)
 
             # Look up custom start picture for this specific bot
             custom_start_pic = None
@@ -66,7 +70,13 @@ async def starttt(client, message):
                 disable_web_page_preview=False,
             )
 
-        elif message.chat.type != ChatType.PRIVATE:
+        else:
+            from Emilia.mongo.users_mongo import add_chat
+            
+            if getattr(client, "is_clone", False):
+                current_bot_id = int(client.bot_token.split(":")[0])
+                await add_chat(message.chat.id, message.chat.title, bot_id=current_bot_id)
+            
             await message.reply("Hey there, ping me in my PM to get help!")
 
     if len(message.text.split()) > 1:
@@ -76,20 +86,20 @@ async def starttt(client, message):
 
         # Captcha Redirect Implementation
         if startCheckQuery(message, StartQuery="captcha"):
-            await buttonCaptchaRedirect(message)
-            await textCaptchaRedirect(message)
+            await buttonCaptchaRedirect(client, message)
+            await textCaptchaRedirect(client, message)
 
         # Private Notes Redirect Implementation
         elif startCheckQuery(message, StartQuery="note"):
-            await note_redirect(message)
+            await note_redirect(client, message)
 
         # Connection Redirect Implementation
         elif startCheckQuery(message, StartQuery="connect"):
-            await connectRedirect(message)
+            await connectRedirect(client, message)
 
         # Rules Redirect Implementation
         elif startCheckQuery(message, StartQuery="rules"):
-            await rulesRedirect(message)
+            await rulesRedirect(message, client)
 
         elif startCheckQuery(message, StartQuery="anihelp"):
             await help_(client, message)

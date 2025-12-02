@@ -1,6 +1,6 @@
 import csv
 from datetime import datetime
-import json
+import orjson
 import uuid
 from xml.etree.ElementTree import Element, tostring
 
@@ -1271,7 +1271,7 @@ async def fed_export___(e, sender_id: int = None, anon: bool = False):
                 "reason": fb[2],
                 "time": str(fb[3]),
             }
-            fban_list += json.dumps(json_p) + "\n"
+            fban_list += orjson.dumps(json_p).decode('utf-8') + "\n"
         with open("fbanned_users.json", "w") as f:
             f.write(fban_list)
         await e.reply("Fbanned users in {}.".format(fname), file="fbanned_users.json")
@@ -1350,10 +1350,10 @@ async def fed_import___(e, sender_id: int = None, anon: bool = False):
         )
     elif Ext == "json":
         fbans = []
-        with open(f, "r") as f:
+        with open(f, "rb") as f:
             fp = f.readlines()
         for x in fp:
-            fbans.append(json.loads(x))
+            fbans.append(orjson.loads(x))
         for x in fbans:
             await db.fban_user(
                 fed_id,

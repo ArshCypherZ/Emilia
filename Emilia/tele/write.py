@@ -9,7 +9,7 @@ from Emilia.utils.async_http import get
 
 @register(pattern="write", disable=True)
 @disable
-@rate_limit(40, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def writer(m: events.NewMessage):
     async def process_text(text):
         encoded_text = text.replace(" ", "%20")

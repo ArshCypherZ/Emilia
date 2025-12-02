@@ -6,7 +6,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
 )
 
-from Emilia import BOT_USERNAME, pgram
+from Emilia import BOT_USERNAME
 from Emilia.helper.button_gen import button_markdown_parser
 from Emilia.helper.chat_status import isUserAdmin
 from Emilia.mongo.rules_mongo import get_rules
@@ -68,14 +68,14 @@ async def CaptchaCallback(client: Client, callback_query: CallbackQuery):
             reply_markup = None
         await callback_query.edit_message_reply_markup(reply_markup=reply_markup)
         await callback_query.answer(text="Thank for your time!")
-        await pgram.restrict_chat_member(
+        await client.restrict_chat_member(
             chat_id, new_user_id, ChatPermissions(can_send_messages=True)
         )
     else:
         await callback_query.answer(text="This button isn't made for you!")
 
 
-async def buttonCaptchaRedirect(message):
+async def buttonCaptchaRedirect(client, message):
     user_id = message.from_user.id
     if message.text.split()[1].split("_")[1] == "button":
         new_user_id = int(message.text.split()[1].split("_")[2])
@@ -111,5 +111,5 @@ async def buttonCaptchaRedirect(message):
                 captcha_list,
             ) = await GetUserCaptchaMessageIDs(chat_id=new_chat_id, user_id=user_id)
             await ruleCaptchaButton(
-                message=message, chat_id=new_chat_id, message_id=message_id
+                client, message=message, chat_id=new_chat_id, message_id=message_id
             )

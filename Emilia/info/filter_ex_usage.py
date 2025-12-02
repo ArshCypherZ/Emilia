@@ -16,6 +16,9 @@ Filters can seem quite complicated; so here are some examples, so you can get so
 • Set a filter on a sentence:
 -> `/filter "hello friend" Hello back! Long time no see!`
 
+• Set a filter that replies to the person you replied to:
+-> `/filter magic Watch out for wizards! {replytag}`
+
 • To save a file, image, gif, or any other attachment, simply reply to file with:
 -> `/filter trigger`
 """

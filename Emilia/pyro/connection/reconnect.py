@@ -17,7 +17,7 @@ async def reconnectC(client, message):
         return
     if await GetConnectedChat(user_id) is not None:
         chat_id = await GetConnectedChat(user_id)
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
         chat_title = html.escape(chat_title)
         if await connection(message) is None:
             await reconnectChat(user_id)

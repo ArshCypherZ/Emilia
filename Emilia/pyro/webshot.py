@@ -12,7 +12,7 @@ from Emilia.utils.decorators import *
 @description("Screenshots given website.")
 @Client.on_message(custom_filter.command(commands="webss", disable=True))
 @disable
-@rate_limit(10, 60)
+@rate_limit(RATE_LIMIT_HEAVY)
 async def take_ss(_, message: Message):
     try:
         if len(message.text.split()) != 2:

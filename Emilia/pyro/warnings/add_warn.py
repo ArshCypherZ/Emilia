@@ -1,6 +1,6 @@
 from pyrogram import Client
 
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import isBotCan, isUserCan
 from Emilia.helper.get_user import get_text
 from Emilia.pyro.warnings.warn import warn
@@ -37,5 +37,5 @@ async def addwarn(client, message):
 
     if warn_r:
         if message_id is not None:
-            await pgram.delete_messages(chat_id=chat_id, message_ids=message_id)
+            await client.delete_messages(chat_id=chat_id, message_ids=message_id)
     return log_msg, info.id, info.first_name

@@ -50,9 +50,9 @@ class AsyncResponse:
 
     def json(self):
         if self._json is None:
-            import json
+            import orjson
 
-            self._json = json.loads(self.text or "{}")
+            self._json = orjson.loads(self.text or "{}")
         return self._json
 
     def raise_for_status(self):

@@ -3,7 +3,7 @@ import re
 
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from Emilia import BOT_USERNAME, pgram
+from Emilia import BOT_USERNAME
 from Emilia.helper.button_gen import button_markdown_parser
 from Emilia.helper.note_helper.note_fillings import NoteFillings
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
@@ -11,7 +11,7 @@ from Emilia.mongo.notes_mongo import GetNote
 from Emilia.pyro.connection.connection import connection
 
 
-async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
+async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id: int):
     message.from_user.id
     if await connection(message) is not None:
         from_chat_id = await connection(message)
@@ -62,7 +62,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         reply_markup = None
 
     if data_type == 1:
-        await pgram.send_message(
+        await client.send_message(
             chat_id=chat_id,
             text=text,
             reply_to_message_id=message_id,
@@ -71,7 +71,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 2:
-        await pgram.send_sticker(
+        await client.send_sticker(
             chat_id=chat_id,
             sticker=content,
             reply_to_message_id=message_id,
@@ -79,7 +79,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 3:
-        await pgram.send_animation(
+        await client.send_animation(
             chat_id=chat_id,
             animation=content,
             caption=text,
@@ -88,7 +88,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 4:
-        await pgram.send_document(
+        await client.send_document(
             chat_id=chat_id,
             document=content,
             caption=text,
@@ -97,7 +97,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 5:
-        await pgram.send_photo(
+        await client.send_photo(
             chat_id=chat_id,
             photo=content,
             caption=text,
@@ -106,7 +106,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 6:
-        await pgram.send_audio(
+        await client.send_audio(
             chat_id=chat_id,
             audio=content,
             caption=text,
@@ -114,7 +114,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
             reply_markup=reply_markup,
         )
     elif data_type == 7:
-        await pgram.send_voice(
+        await client.send_voice(
             chat_id=chat_id,
             voice=content,
             caption=text,
@@ -123,7 +123,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 8:
-        await pgram.send_video(
+        await client.send_video(
             chat_id=chat_id,
             video=content,
             caption=text,
@@ -132,7 +132,7 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
         )
 
     elif data_type == 9:
-        await pgram.send_video_note(
+        await client.send_video_note(
             chat_id=chat_id,
             video_note=content,
             reply_to_message_id=message_id,
@@ -146,9 +146,9 @@ async def SendNoteMessage(message: Message, note_name: str, from_chat_id: int):
 # by "messages.SendMessage")
 
 
-async def exceNoteMessageSender(message, note_name, from_chat_id=None):
+async def exceNoteMessageSender(client, message, note_name, from_chat_id=None):
     try:
-        await SendNoteMessage(message, note_name, from_chat_id)
+        await SendNoteMessage(client, message, note_name, from_chat_id)
     except Exception as e:
         await message.reply(
             (
