@@ -16,6 +16,7 @@ from Emilia.utils.decorators import *
 from Emilia.utils.auth import is_owner, is_dev
 
 db_ = db.users
+chatlevels = db.chatlevels
 
 btn = InlineKeyboardMarkup(
     [[InlineKeyboardButton("Close", callback_data="close_info")]]
@@ -142,79 +143,97 @@ async def _info(_, message):
     try:
         user = await _.get_users(user_id)
     except Exception as e:
-        return await message.reply_text(e)
+        return await message.reply_text(str(e))
 
     text = "**Info found**:\n\n"
     text += f"**User ID**: `{user_id}`\n"
-    text += f"**DC ID**: `{user.dc_id}`\n\n"
     text += f"**First Name**: `{user.first_name}`\n"
     if user.last_name:
         text += f"**Last Name**: `{user.last_name}`\n"
     if user.username:
         text += f"**Username**: @{user.username}\n"
-    text += f"**Link**: {user.mention}\n\n"
+    text += f"**Link**: {user.mention}\n"
     try:
         karma = await user_global_karma(user_id)
-        text += f"**Global Karma Points**: `{karma}`\n\n"
-    except IndexError:
+        text += f"**Global Karma Points**: `{karma}`\n"
+    except (IndexError, Exception):
         pass
-    text += f"**Premium User? {user.is_premium}**\n"
+
+    text += f"**Premium User?** {'Yes' if user.is_premium else 'No'}\n"
     if str(chat_id).startswith("-100"):
-        ptext = "**Presence {}**"
-        if await is_afk(user_id):
-            text += ptext.format("AFK")
-        else:
-            try:
-                member = await _.get_chat_member(chat_id, user_id)
-                if member.status in [
-                    enums.ChatMemberStatus.LEFT,
-                    enums.ChatMemberStatus.BANNED,
-                ]:
-                    text += ptext.format("No")
-                if member.status == enums.ChatMemberStatus.MEMBER:
-                    text += ptext.format("Member")
-                if member.status in [
-                    enums.ChatMemberStatus.ADMINISTRATOR,
-                    enums.ChatMemberStatus.OWNER,
-                ]:
-                    text += ptext.format("Admin")
-            except BadRequest:
-                text += ptext.format("No")
-
+        text += "\n**Presence**: "
+        member = None
         try:
-            mm = await _.get_chat_member(chat_id, user_id)
-            if (
-                member.status
-                in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
-                and mm.custom_title
-            ):
-                text += f"\n\nThis user holds the title **{mm.custom_title}** here."
-
+            member = await _.get_chat_member(chat_id, user_id)
+            status_map = {
+                enums.ChatMemberStatus.OWNER: "Owner",
+                enums.ChatMemberStatus.ADMINISTRATOR: "Administrator",
+                enums.ChatMemberStatus.MEMBER: "Member",
+                enums.ChatMemberStatus.LEFT: "Left",
+                enums.ChatMemberStatus.BANNED: "Banned",
+                enums.ChatMemberStatus.RESTRICTED: "Restricted"
+            }
+            status_str = status_map.get(member.status, "Unknown")
+            text += f"{status_str}\n"
+            
+            if member.custom_title:
+                text += f"This user holds the title **{member.custom_title}** here.\n"
+                
         except BadRequest:
-            pass
+            text += "Not in Chat\n"
+        
+        # AFK Check
+        if await is_afk(user_id):
+            text += "Status: AFK\n"
 
     if is_owner(user_id):
-        text += "\n\nHe is my cute neko Arshhhhhhhhh <3"
-
+        text += "\nHe is my cute neko Arsshhhhhhhhhh <3\n"
     elif is_dev(user_id):
-        text += "\n\nOne of my developers, respect ++"
+        text += "\nOne of my developers, respect +++\n"
 
-    if await banned(user_id):
-        chec = us.get_info(user_id)
-        text += "<b>\n\nVanitas:\n</b>"
-        text += "<b>This person is banned in @SpamWatchingBot!</b>"
-        text += f"\nReason: <pre>{chec['reason']}</pre>"
-        text += "\nAppeal at @VanitasSupport"
-    else:
-        text += "<b>\n\n@SpamWatchingBot:</b> Not banned"
+    try:
+        if await banned(user_id):
+            chec = us.get_info(user_id)
+            text += "\n**Safety Status**:\n"
+            text += "SpamWatch: BANNED\n"
+            text += f"Reason: {chec['reason']}\n"
+        else:
+            # clean output: don't show "Not banned" if clean, or show minimal
+            pass
+    except Exception:
+        pass
 
+    # Chat Levels Info (Prestige & Rep)
+    # DB Call - Fast
+    try:
+        level_doc = await chatlevels.find_one({"user_id": user_id, "chat_id": chat_id})
+        if level_doc:
+            prestige = level_doc.get("prestige", 0)
+            rep = level_doc.get("reputation", 0)
+            current_xp = level_doc.get("points", 0)
+            
+            if prestige > 0 or rep > 0 or current_xp > 0:
+                text += "\n**Activity Stats**:\n"
+                if prestige > 0:
+                    text += f"**Prestige Level**: {prestige}\n"
+                if rep > 0:
+                    text += f"**Reputation**: {rep}\n"
+                text += f"**XP**: {current_xp}\n"
+    except Exception:
+        pass
+
+    # Media Dispatch
+    # download_media is IO heavy.
     if user.photo:
-        pic = await _.download_media(user.photo.big_file_id)
-        await _.send_photo(message.chat.id, photo=pic, caption=text, reply_markup=btn)
-        os.remove(pic)
+        try:
+            pic = await _.download_media(user.photo.big_file_id)
+            await _.send_photo(message.chat.id, photo=pic, caption=text, reply_markup=btn)
+            os.remove(pic)
+        except Exception:
+            # Fallback if download fails
+            await message.reply(text, reply_markup=btn)
     else:
         await message.reply(text, reply_markup=btn)
-
 
 @usage("/ginfo [chat id/username]")
 @example("/ginfo @SpiralTechDivision")

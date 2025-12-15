@@ -5,18 +5,25 @@ __mod_name__ = "Rankings"
 __sub_mod__ = ["Karma"]
 
 __help__ = f"""
-{BOT_NAME} now provides a more interactive and playful environment for group chats!
+**Leveling System**
 
-You can now enjoy our new chat levels module to increase your points and level up in a specific group chat. All you need to do is register yourself for unlocking new adventures!
+The Leveling System rewards active participation in group chats. Users earn Experience Points (XP) by chatting, which unlocks new Ranks and features.
 
-**Commands**:
+**Core Commands:**
+• `/register [name]` - Create your profile to start earning XP.
+• `/rank` - View your Rank Card, current stats, and progress.
+• `/leaderboard` - Display the top users in the current chat.
+• `/daily` - Claim your daily XP bonus. Consecutive claims build a **Streak Bonus**.
+• `/weekly` - Claim your weekly XP bonus (available every 7 days).
+• `/rankings` - View detailed information about Ranks and requirements.
 
-• /register [name]: This is a one time command for users to register themselves to play chat levels.
-• /rank: This will show your rankings and stats.
-• /leaderboard: Shows current leaderboard among top players.
-• /daily: Use it once in every 24 hours to get a 100 points gift.
-• /weekly: Use it once in every 7 days to get a 500 points gift.
-• /rankings: To know more about chat levels.
+**Advanced Features:**
+• **Prestige**: Upon reaching the maximum rank, use `/prestige` to reset your level in exchange for a **Prestige Badge** and a permanent **XP Multiplier**.
+• **Reputation**: Reply to a helpful user with `/thanks` or `+rep` to increase their Reputation score. Use `/info` to view a user's Reputation.
+• **Events**: Administrators may activate global XP multipliers during special events.
 
-You can also enable/disable karma system [/karma] to connect chat levels with karmas too.
+**Admin:**
+• `/level [on/off]` - Enable or disable the leveling system in the current chat.
+
+Note: You can link your Leveling profile with the Karma system using `/karma`.
 """

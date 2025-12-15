@@ -3,7 +3,7 @@ from pyrogram.errors import BadRequest
 from pyrogram.types import ChatPermissions
 
 import Emilia.strings as strings
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import check_bot, check_user
 from Emilia.mongo.locks_mongo import lock_db
 from Emilia.pyro.connection.connection import connection
@@ -67,7 +67,7 @@ async def lock(client, message):
 
     if "all" in LOCK_ITMES:
         try:
-            await pgram.set_chat_permissions(chat_id, ChatPermissions())
+            await client.set_chat_permissions(chat_id, ChatPermissions())
         except BadRequest:
             return await message.reply(
                 "Non-admins already can't send messages. What are you even trying to do m8?"

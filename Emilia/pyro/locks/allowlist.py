@@ -16,7 +16,7 @@ async def allowlist(client, message):
     conn_chat_id = await connection(message)
     if conn_chat_id is not None:
         chat_id = conn_chat_id
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
     else:
         chat_id = message.chat.id
         chat_title = message.chat.title

@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timedelta
 
 from pyrogram.types import ChatPermissions
 
@@ -83,8 +84,8 @@ async def warn_checker(client, message, user_id, silent=False):
             return True, log_msg
 
         elif warn_mode == 4:
-            until_time = int(time.time() + int(warn_mode_time))
-            await client.restrict_chat_member(chat_id, user_id, until_date=until_time)
+            until_date = datetime.now() + timedelta(seconds=int(warn_mode_time))
+            await client.restrict_chat_member(chat_id, user_id, until_date=until_date)
 
             if not silent:
                 user_info = await client.get_users(user_ids=user_id)
@@ -99,12 +100,12 @@ async def warn_checker(client, message, user_id, silent=False):
             return True, log_msg
 
         elif warn_mode == 5:
-            until_time = int(time.time() + int(warn_mode_time))
+            until_date = datetime.now() + timedelta(seconds=int(warn_mode_time))
             await client.restrict_chat_member(
                 chat_id,
                 user_id,
                 ChatPermissions(can_send_messages=False),
-                until_date=until_time,
+                until_date=until_date,
             )
 
             if not silent:

@@ -3,7 +3,7 @@ import asyncio
 from pyrogram import Client, enums, filters
 from urlextract import URLExtract
 
-from Emilia import db, pgram
+from Emilia import db
 from Emilia.helper.chat_status import check_bot, isUserAdmin
 from Emilia.mongo.locks_mongo import get_allowlist, get_locks, lockwarns_db
 from Emilia.pyro.locks import lock_map
@@ -28,29 +28,29 @@ _lockwarns_cache = SimpleCache(default_ttl=300)
 
 async def _get_locks_cached(chat_id: int):
     k = f"locks:{chat_id}"
-    v = _locks_cache.get(k)
+    v = await _locks_cache.get(k)
     if v is not None:
         return v
     data = await get_locks(chat_id)
-    _locks_cache.set(k, data, ttl=120)
+    await _locks_cache.set(k, data, ttl=120)
     return data
 
 async def _get_allowlist_cached(chat_id: int):
     k = f"allow:{chat_id}"
-    v = _allow_cache.get(k)
+    v = await _allow_cache.get(k)
     if v is not None:
         return v
     data = await get_allowlist(chat_id)
-    _allow_cache.set(k, data, ttl=120)
+    await _allow_cache.set(k, data, ttl=120)
     return data
 
 async def _get_lockwarns(chat_id: int) -> bool:
     k = f"lwarn:{chat_id}"
-    v = _lockwarns_cache.get(k)
+    v = await _lockwarns_cache.get(k)
     if v is not None:
         return v
     flag = await lockwarns_db(chat_id)
-    _lockwarns_cache.set(k, flag, ttl=300)
+    await _lockwarns_cache.set(k, flag, ttl=300)
     return flag
 
 @Client.on_message(
@@ -84,8 +84,8 @@ async def locks_checker(client, message):
                     await warn(client, message, reason, warn_user=message)
 
                 bot_id = new_member.id
-                await pgram.ban_chat_member(chat_id, bot_id)
-                await pgram.unban_chat_member(chat_id, bot_id)
+                await client.ban_chat_member(chat_id, bot_id)
+                await client.unban_chat_member(chat_id, bot_id)
                 await message.delete()
 
     if 5 in LOCKS_LIST:
@@ -108,10 +108,10 @@ async def locks_checker(client, message):
             ):
                 from_user = message.from_user.id
                 channel_id = message.reply_to_message.forward_from_chat.id
-                chat_data = await pgram.get_chat(chat_id=chat_id)
+                chat_data = await client.get_chat(chat_id=chat_id)
                 linked_chat = chat_data.linked_chat.id
                 if linked_chat == channel_id:
-                    chat_member = await pgram.get_chat_member(
+                    chat_member = await client.get_chat_member(
                         chat_id=chat_id, user_id=from_user
                     )
                     if not chat_member.is_member:
@@ -290,10 +290,10 @@ async def lock_action(client, message, action: int = None, delete: bool = True):
     uid = message.sender_chat.id if getattr(message, "sender_chat", None) else (message.from_user.id if message.from_user else None)
     if uid is not None:
         key = f"appr:{message.chat.id}:{uid}"
-        cached = approvals_cache.get(key)
+        cached = await approvals_cache.get(key)
         if cached is None:
             cached = await collection.find_one({"user_id": uid, "chat_id": message.chat.id}) is not None
-            approvals_cache.set(key, cached, ttl=180)
+            await approvals_cache.set(key, cached, ttl=180)
         if cached:
             return
     if not await check_bot(

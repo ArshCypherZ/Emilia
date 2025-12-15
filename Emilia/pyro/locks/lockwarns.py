@@ -17,7 +17,7 @@ LOCKWARN_FALSE = ["off", "no"]
 async def lockwarns(client, message):
     if await connection(message) is not None:
         chat_id = await connection(message)
-        chat_title = await GetChat(chat_id)
+        chat_title = await GetChat(chat_id, client)
     else:
         chat_id = message.chat.id
         chat_title = message.chat.title

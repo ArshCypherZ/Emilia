@@ -13,25 +13,49 @@ from Emilia.utils.decorators import *
 from Emilia.utils.cache import SimpleCache, approvals_cache
 
 DB = db.antiflood_chats
-collection = db.flood_msgs
+# collection = db.flood_msgs # Deprecated: Using Redis
 FLOOD_LOCK = set()
+redis_client = db.redis_client
+
+# Caches
+_flood_status_cache = SimpleCache(default_ttl=60)
+# Antiflood Settings Cache: L1 (Memory) -> L2 (Redis) -> L3 (Mongo)
+_settings_cache = SimpleCache(default_ttl=300)
 
 async def flood_limits(chat_id: int):
+    """
+    Fetch flood limits with 3-level caching (Memory -> Redis -> Mongo).
+    Returns: (limit, timed_limit, timed_duration, action, clear_flood, time, timed_on)
+    """
+    cache_key = f"antiflood_settings:{chat_id}"
+    
+    # Try Cache (L1 + L2)
+    cached_data = await _settings_cache.get(cache_key)
+    if cached_data:
+        return cached_data
+
+    # Fetch from Mongo (L3)
     limit = await DB.find_one({"chat_id": chat_id})
-    chat_limit = int(limit.get("limit", 10))
-    timed_limit = int(limit.get("timed_limit", 10))
-    timed_duration = int(limit.get("timed_duration", 10))
-    action = limit.get("action", "ban")
-    clear_flood = limit.get("clear", "yes")
-    if action in ["tban", "tmute"]:
-        time = limit.get("time", None)
-        if time:
-            return chat_limit, timed_limit, timed_duration, action, clear_flood, time
+    if not limit:
+        # Default values. timed_on is False by default if not set.
+        result = (10, 10, 10, "ban", "yes", None, False)
+    else:
+        chat_limit = int(limit.get("limit", 10))
+        timed_limit = int(limit.get("timed_limit", 10))
+        timed_duration = int(limit.get("timed_duration", 10))
+        action = limit.get("action", "ban")
+        clear_flood = limit.get("clear", "yes")
+        timed_on = limit.get("timed_status", "off") == "on"
+        
+        if action in ["tban", "tmute"]:
+            time = limit.get("time", None)
+            result = (chat_limit, timed_limit, timed_duration, action, clear_flood, time, timed_on)
+        else:
+            result = (chat_limit, timed_limit, timed_duration, action, clear_flood, None, timed_on)
 
-    return chat_limit, timed_limit, timed_duration, action, clear_flood, None
-
-# Small TTL caches
-_flood_status_cache = SimpleCache(default_ttl=60)
+    # Set Cache
+    await _settings_cache.set(cache_key, result, ttl=300)
+    return result
 
 async def _check_flood_on_cached(chat_id: int) -> bool:
     k = f"flood_on:{chat_id}"
@@ -100,7 +124,11 @@ async def setfloodtimer(client, message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
-        await message.reply(
+        # Invalidate Settings Cache
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+        await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
+        
+        await_msg = await message.reply(
             "I need permission to delete messages and restrict users to enable antiflood. So I am disabling it in this chat."
         )
         return
@@ -113,6 +141,8 @@ async def setfloodtimer(client, message):
             {"$set": {"timed_status": "off"}},
             upsert=True,
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+        
         await message.reply("Timed antiflood is now disabled.")
         return "DISABLED_TIMED_ANTIFLOOD", None, None
 
@@ -124,6 +154,8 @@ async def setfloodtimer(client, message):
         {"$set": {"timed_limit": int(count), "timed_duration": int(duration), "timed_status": "on"}},
         upsert=True,
     )
+    await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+
     await message.reply(
         f"Timed antiflood is now set to trigger after {count} messages in {duration} seconds."
     )
@@ -146,7 +178,7 @@ async def flood_func(client, message: Message):
     if not await check_flood_on(chat_id):
         await message.reply_text("Antiflood is disabled in this chat.")
     else:
-        limit, timed_limit, timed_duration, action, clear_flood, time = (
+        limit, timed_limit, timed_duration, action, clear_flood, time, timed_on = (
             await flood_limits(chat_id)
         )
         if time:
@@ -198,6 +230,9 @@ async def antiflood_func(client, message: Message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+        await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
+
         await message.reply(
             "I need permission to delete messages and restrict users to enable antiflood. So it will remain disabled until then."
         )
@@ -209,6 +244,7 @@ async def antiflood_func(client, message: Message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "on"}}, upsert=True
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
         await _flood_status_cache.set(f"flood_on:{chat_id}", True, ttl=60)
         await message.reply(
             "Antiflood is now enabled in this chat. Default limit is 10."
@@ -218,6 +254,7 @@ async def antiflood_func(client, message: Message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
         await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
         await message.reply("Antiflood is now disabled in this chat.")
         return "DISABLED_ANTIFLOOD", None, None
@@ -231,6 +268,7 @@ async def antiflood_func(client, message: Message):
                 {"$set": {"limit": status, "status": "on"}},
                 upsert=True,
             )
+            await _settings_cache.delete(f"antiflood_settings:{chat_id}")
             await _flood_status_cache.set(f"flood_on:{chat_id}", True, ttl=60)
             await message.reply(f"Antiflood limit is now set to {status} in this chat.")
             return "NEW_FLOOD_LIMIT", None, None
@@ -278,6 +316,9 @@ async def floodmode(client, message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+        await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
+        
         await message.reply(
             "I need permission to delete messages and restrict users to enable antiflood. So I am disabling it in this chat."
         )
@@ -299,6 +340,8 @@ async def floodmode(client, message):
                 {"$set": {"action": action, "time": time}},
                 upsert=True,
             )
+            await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+
             await message.reply(
                 f"Action to take on flooding users is now set to {action} for {time}."
             )
@@ -311,6 +354,8 @@ async def floodmode(client, message):
         {"$set": {"action": action}},
         upsert=True,
     )
+    await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+
     await message.reply(f"Action to take on flooding users is now set to {action}.")
     return "SET_FLOOD_ACTION", None, None
 
@@ -353,6 +398,9 @@ async def clearflood(client, message):
         await DB.update_one(
             {"chat_id": chat_id}, {"$set": {"status": "off"}}, upsert=True
         )
+        await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+        await _flood_status_cache.set(f"flood_on:{chat_id}", False, ttl=60)
+
         await message.reply(
             "I need permission to delete messages and restrict users to enable antiflood. So I am disabling it in this chat."
         )
@@ -367,158 +415,12 @@ async def clearflood(client, message):
         {"$set": {"clear": action}},
         upsert=True,
     )
+    await _settings_cache.delete(f"antiflood_settings:{chat_id}")
+
     await message.reply(f"Clear flood messages is now set to {action}.")
     return f"SET_CLEAR_FLOOD", None, None
 
 
-async def handle_flood(client, message, user_id: int, chat_id: int):
-    if user_id in FLOOD_LOCK:
-        return
-    
-    settings = await DB.find_one({"chat_id": chat_id})
-    if not settings:
-        return
-    limit = settings.get("limit", 10)
-    timed_limit = settings.get("timed_limit", 10)
-    timed_duration = settings.get("timed_duration", 10)
-    action = settings.get("action", "ban")
-    clear_flood = settings.get("clear", "yes")
-    firstname = (
-        message.from_user.first_name if message.from_user else message.sender_chat.title
-    )
-
-    if settings.get("timed_status", "off") == "on":
-        start_time = datetime.now() - timedelta(seconds=timed_duration)
-        count = await collection.count_documents(
-            {
-                "user_id": user_id,
-                "chat_id": chat_id,
-                "timestamp": {"$gte": start_time.timestamp()},
-            }
-        )
-        if count == timed_limit:
-            FLOOD_LOCK.add(user_id)
-            try:
-                if action == "ban":
-                    await client.ban_chat_member(chat_id, user_id)
-                    await client.send_message(
-                        chat_id, f"{firstname} has been banned for spamming."
-                    )
-                elif action == "mute":
-                    await client.restrict_chat_member(
-                        chat_id,
-                        user_id,
-                        permissions=ChatPermissions(can_send_messages=False),
-                    )
-                    await client.send_message(
-                        chat_id, f"{firstname} has been muted for spamming."
-                    )
-                elif action == "kick":
-                    await client.ban_chat_member(chat_id, user_id)
-                    await client.unban_chat_member(chat_id, user_id)
-                    await client.send_message(
-                        chat_id, f"{firstname} has been kicked for spamming."
-                    )
-                elif action == "tban":
-                    time = settings.get("time")
-                    time_value = await time_converter(message, time)
-                    await client.ban_chat_member(chat_id, user_id, until_date=time_value)
-                    await client.send_message(
-                        chat_id,
-                        f"{firstname} has been temporarily banned ({time}) for spamming.",
-                    )
-                elif action == "tmute":
-                    time = settings.get("time")
-                    time_value = await time_converter(message, time)
-                    await client.restrict_chat_member(
-                        chat_id,
-                        user_id,
-                        permissions=ChatPermissions(can_send_messages=False),
-                        until_date=time_value,
-                    )
-                    await client.send_message(
-                        chat_id,
-                        f"{firstname} has been temporarily muted ({time}) for spamming.",
-                    )
-
-                if clear_flood in ["yes", "on"]:
-                    msg_ids = []
-                    async for doc in collection.find({"user_id": user_id, "chat_id": chat_id}):
-                        mid = doc["msg_id"]
-                        if isinstance(mid, int):
-                            msg_ids.append(mid)
-                    if msg_ids:
-                        try:
-                            await client.delete_messages(chat_id, msg_ids)
-                        except Exception as e:
-                            LOGGER.warning(f"antiflood: failed to delete flood msgs in {chat_id}: {e}")
-                    await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
-            finally:
-                FLOOD_LOCK.discard(user_id)
-    else:
-        counter = await collection.count_documents(
-            {"user_id": user_id, "chat_id": chat_id}
-        )
-        if counter == limit:
-            FLOOD_LOCK.add(user_id)
-            try:
-                if action == "ban":
-                    await client.ban_chat_member(chat_id, user_id)
-                    await client.send_message(
-                        chat_id, f"{firstname} has been banned for spamming."
-                    )
-                elif action == "mute":
-                    await client.restrict_chat_member(
-                        chat_id,
-                        user_id,
-                        permissions=ChatPermissions(can_send_messages=False),
-                    )
-                    await client.send_message(
-                        chat_id, f"{firstname} has been muted for spamming."
-                    )
-                elif action == "kick":
-                    await client.ban_chat_member(chat_id, user_id)
-                    await client.unban_chat_member(chat_id, user_id)
-                    await client.send_message(
-                        chat_id, f"{firstname} has been kicked for spamming."
-                    )
-                elif action == "tban":
-                    time = settings.get("time")
-                    time_value = await time_converter(message, time)
-                    await client.ban_chat_member(chat_id, user_id, until_date=time_value)
-                    await client.send_message(
-                        chat_id,
-                        f"{firstname} has been temporarily banned ({time}) for spamming.",
-                    )
-                elif action == "tmute":
-                    time = settings.get("time")
-                    time_value = await time_converter(message, time)
-                    await client.restrict_chat_member(
-                        chat_id,
-                        user_id,
-                        permissions=ChatPermissions(can_send_messages=False),
-                        until_date=time_value,
-                    )
-                    await client.send_message(
-                        chat_id,
-                        f"{firstname} has been temporarily muted ({time}) for spamming.",
-                    )
-                await sleep(5)
-
-                if clear_flood in ["yes", "on"]:
-                    msg_ids = []
-                    async for doc in collection.find({"user_id": user_id, "chat_id": chat_id}):
-                        mid = doc["msg_id"]
-                        if isinstance(mid, int):
-                            msg_ids.append(mid)
-                    if msg_ids:
-                        try:
-                            await client.delete_messages(chat_id, msg_ids)
-                        except Exception as e:
-                            LOGGER.warning(f"antiflood: failed to delete flood msgs in {chat_id}: {e}")
-                    await collection.delete_many({"user_id": user_id, "chat_id": chat_id})
-            finally:
-                FLOOD_LOCK.discard(user_id)
 
 approve_collection = db["approve_d"]
 
@@ -531,46 +433,118 @@ approve_collection = db["approve_d"]
     group=11,
 )
 async def handle_message(client, message):
+    if not message.from_user:
+        return
+
     chat_id = message.chat.id
-    user_id = message.from_user.id if message.from_user else message.sender_chat.id
+    user_id = message.from_user.id
     msg_id = message.id
 
+    # Fast path check
     if not await _check_flood_on_cached(chat_id):
         return
+    # GLOBAL STATE TRACKING (Crucial for resetting consecutive counts)
+    # We must track "Last User" change BEFORE ignoring admins.
+    last_user_key = f"flood:last_user:{chat_id}"
+    last_user_id = await redis_client.get(last_user_key)
     
-    chat_settings = await DB.find_one({"chat_id": chat_id})
-    last_user = chat_settings.get("last_user_id") if chat_settings else None
-    
+    # Check if user changed
+    if last_user_id and int(last_user_id) != user_id:
+        # User changed! Reset the *consecutive* flood counter for the PREVIOUS user.
+        # This prevents the bot from thinking the previous user is still spamming
+        # if they resume after an interruption.
+        pass
+
+    # Update Last User to Current
+    await redis_client.set(last_user_key, user_id)
+    # Check approval
     if await _is_approved_cached(chat_id, user_id):
-        if last_user and last_user != user_id:
-            await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
-        await DB.update_one(
-            {"chat_id": chat_id},
-            {"$set": {"last_user_id": user_id}},
-            upsert=True
-        )
+        if last_user_id and int(last_user_id) != user_id:
+             # Regular user -> Approved User.
+             # Clear Regular User's ZSET to be lenient (reset their strict consecutive count).
+             await redis_client.delete(f"flood:zset:{chat_id}:{int(last_user_id)}")
         return
 
     if await isUserAdmin(message, silent=True):
-        if last_user and last_user != user_id:
-            await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
-        await DB.update_one(
-            {"chat_id": chat_id},
-            {"$set": {"last_user_id": user_id}},
-            upsert=True
-        )
+        if last_user_id and int(last_user_id) != user_id:
+             # Regular user -> Admin.
+             # Clear Regular User's ZSET.
+             await redis_client.delete(f"flood:zset:{chat_id}:{int(last_user_id)}")
         return
+    # If we are regular user:
+    # Clear PREVIOUS user if different
+    if last_user_id and int(last_user_id) != user_id:
+        await redis_client.delete(f"flood:zset:{chat_id}:{int(last_user_id)}")
 
-    if last_user and last_user != user_id:
-        await collection.delete_many({"user_id": last_user, "chat_id": chat_id})
+    # Fetch settings
+    (limit, timed_limit, timed_duration, action, clear_flood, time, timed_on) = await flood_limits(chat_id)
+    limit = int(limit)
+    timed_limit = int(timed_limit)
+    timed_duration = int(timed_duration)
     
-    await DB.update_one(
-        {"chat_id": chat_id},
-        {"$set": {"last_user_id": user_id}},
-        upsert=True
-    )
+    current_time = datetime.now().timestamp()
+    zkey = f"flood:zset:{chat_id}:{user_id}"
 
-    await collection.insert_one(
-        {"user_id": user_id, "chat_id": chat_id, "msg_id": msg_id, "timestamp": datetime.now().timestamp(), "date": datetime.utcnow()}
-    )
-    await handle_flood(client, message, user_id, chat_id)
+    # Add message to ZSET
+    await redis_client.zadd(zkey, {str(msg_id): current_time})
+    await redis_client.expire(zkey, max(timed_duration, 60) + 10)
+
+    should_punish = False
+    
+    if timed_on:
+        # Count messages within last 'timed_duration' seconds
+        min_score = current_time - timed_duration
+        count = await redis_client.zcount(zkey, min_score, "+inf")
+        if count >= timed_limit:
+            should_punish = True
+    else:
+        # Consecutive count
+        # By clearing the ZSET on user switch, ZCARD is effectively consecutive count
+        count = await redis_client.zcard(zkey)
+        if count >= limit:
+            should_punish = True
+
+    if should_punish:
+        if user_id in FLOOD_LOCK:
+            return
+        FLOOD_LOCK.add(user_id)
+        try:
+            firstname = message.from_user.first_name
+            
+            # Exec Punishment
+            if action == "ban":
+                await client.ban_chat_member(chat_id, user_id)
+                await client.send_message(chat_id, f"{firstname} has been banned for spamming.")
+            elif action == "mute":
+                await client.restrict_chat_member(chat_id, user_id, permissions=ChatPermissions(can_send_messages=False))
+                await client.send_message(chat_id, f"{firstname} has been muted for spamming.")
+            elif action == "kick":
+                await client.ban_chat_member(chat_id, user_id)
+                await client.unban_chat_member(chat_id, user_id)
+                await client.send_message(chat_id, f"{firstname} has been kicked for spamming.")
+            elif action in ["tban", "tmute"]:
+                time_str = time
+                time_value = await time_converter(message, time_str)
+                if action == "tban":
+                    await client.ban_chat_member(chat_id, user_id, until_date=time_value)
+                    await client.send_message(chat_id, f"{firstname} has been temporarily banned ({time_str}) for spamming.")
+                else:
+                    await client.restrict_chat_member(chat_id, user_id, permissions=ChatPermissions(can_send_messages=False), until_date=time_value)
+                    await client.send_message(chat_id, f"{firstname} has been temporarily muted ({time_str}) for spamming.")
+            
+            # Clear messages
+            if clear_flood in ["yes", "on"]:
+                # Get all msg_ids from ZSET
+                msg_ids_raw = await redis_client.zrange(zkey, 0, -1)
+                msg_ids = [int(m) for m in msg_ids_raw]
+                if msg_ids:
+                    try:
+                        await client.delete_messages(chat_id, msg_ids)
+                    except Exception:
+                        pass
+            
+            # Clear Redis state
+            await redis_client.delete(zkey)
+            
+        finally:
+            FLOOD_LOCK.discard(user_id)

@@ -10,6 +10,9 @@ from Emilia.custom_filter import callbackquery, register
 from Emilia.functions.admins import get_time, is_admin
 from Emilia.utils.decorators import *
 from Emilia.utils.cache import SimpleCache
+from Emilia.utils.rank_card import generate_rank_card_sync
+import functools
+import math
 
 users_collection = db.chatlevels
 first_name = db.first_name
@@ -24,7 +27,30 @@ ranks = [
     {"name": "DragonKin", "min_points": 100000},
 ]
 
-levels = 1000
+# Configurable constants
+XP_BASE = 50
+XP_MULTIPLIER = 1.3
+MAX_LEVEL = 1000
+_event_multiplier = 1.0
+
+# Helper functions for dynamic XP
+def get_level_from_xp(xp):
+    if xp <= 0: return 1
+    # formula: lvl = (xp/base)^(1/mult)
+    return int(((xp / XP_BASE) ** (1 / XP_MULTIPLIER)) + 0.01) + 1
+
+def get_xp_for_level(level, prestige_level=0):
+    if level <= 1: return 0
+    return int(XP_BASE * ((level - 1) ** XP_MULTIPLIER))
+
+def get_progress_bar(current, total, length=10):
+    if total <= 0:
+        percent = 1.0
+    else:
+        percent = min(1.0, current / total)
+    filled = int(length * percent)
+    return "█" * filled + "░" * (length - filled) + f" {int(percent * 100)}%"
+
 
 # Lightweight in-memory caches and buffers
 _level_cache = SimpleCache(default_ttl=120)  # per-chat toggle
@@ -182,24 +208,52 @@ async def increase_points(user_id, chat_id, points):
     )
 
 
-async def get_leaderboard(chat_id):
+async def get_leaderboard(chat_id, limit=10, skip=0):
     # Use Mongo sort + limit
-    cursor = users_collection.find({"chat_id": chat_id}, {"_id": 0, "user_id": 1, "points": 1}).sort("points", -1).limit(10)
-    return await cursor.to_list(length=10)
+    cursor = users_collection.find({"chat_id": chat_id}, {"_id": 0, "user_id": 1, "points": 1}).sort("points", -1).skip(skip).limit(limit)
+    return await cursor.to_list(length=limit)
 
 
 async def get_user_stats(user_id, chat_id):
     user_data = await users_collection.find_one(
-        {"user_id": user_id, "chat_id": chat_id}, {"_id": 0, "points": 1}
+        {"user_id": user_id, "chat_id": chat_id}
     )
     if not user_data:
         return None
     points = user_data.get("points", 0)
     first_name1 = await _get_first_name(user_id)
-    level_val = min(points // 10, levels)
-    rank = await get_rank(points)
-    return {"points": points, "first_name": first_name1, "level": level_val, "rank": rank}
+    
+    # Dynamic Level Calculation
+    level_val = get_level_from_xp(points)
+    
+    # XP Stats
+    next_level_xp_total = get_xp_for_level(level_val + 1)
+    current_level_xp_start = get_xp_for_level(level_val)
+    
+    xp_in_level = points - current_level_xp_start
+    xp_needed_level = next_level_xp_total - current_level_xp_start
+    
+    if xp_needed_level > 0:
+        progress = xp_in_level / xp_needed_level
+    else:
+        progress = 1.0
 
+    rank = await get_rank(points)
+    
+    return {
+        "points": points,
+        "first_name": first_name1,
+        "level": level_val,
+        "rank": rank,
+        "xp_in_level": xp_in_level,
+        "xp_needed_level": xp_needed_level,
+        "next_level_xp_total": next_level_xp_total,
+        "progress": progress,
+        "last_date": user_data.get("last_date", 0),
+        "streak": user_data.get("streak", 0),
+        "prestige": user_data.get("prestige", 0),
+        "reputation": user_data.get("reputation", 0)
+    }
 
 async def is_flooding(user_id, chat_id):
     # use projected fields only
@@ -212,6 +266,91 @@ async def is_flooding(user_id, chat_id):
         return (current_time - last_message_time) < 5
     return False
 
+@register(pattern="prestige")
+async def prestige_handler(event):
+    if not event.is_group: return
+    if not await _get_level_on(event.chat_id): return
+    
+    stats = await get_user_stats(event.sender_id, event.chat_id)
+    if not stats: return await event.reply("Register first!")
+    
+    # Requirement: Max Rank (DragonKin) approx 100k points
+    if stats["points"] < 100000:
+        return await event.reply("You need to reach **DragonKin** rank (100,000 XP) to prestige!")
+    new_prestige = stats["prestige"] + 1
+    await users_collection.update_one(
+        {"user_id": event.sender_id, "chat_id": event.chat_id},
+        {
+            "$set": {"points": 0, "prestige": new_prestige}
+        }
+    )
+    
+    await event.reply(
+        f"🚨 **PRESTIGE ADVANCEMENT** 🚨\n\n"
+        f"User: {stats['first_name']}\n"
+        f"Prestige Level: **{new_prestige}** 💎\n"
+        f"XP has been reset. Your XP Multiplier has increased!"
+    )
+
+@register(pattern="thanks|rep")
+async def reputation_handler(event):
+    if not event.is_group: return
+    if not await _get_level_on(event.chat_id): return
+    if not event.reply_to_msg_id:
+        return await event.reply("Reply to a user to give reputation!")
+        
+    reply_msg = await event.get_reply_message()
+    if reply_msg.sender_id == event.sender_id:
+        return await event.reply("You can't give rep to yourself, narcissist!")
+    if reply_msg.sender_id == 5737513498: # Ignoring bot
+         return
+    
+    # We need a 'last_rep_given' field in user document
+    giver_data = await users_collection.find_one(
+        {"user_id": event.sender_id, "chat_id": event.chat_id},
+        {"last_rep_given": 1}
+    )
+    
+    now_ts = time.time()
+    last_rep = giver_data.get("last_rep_given", 0) if giver_data else 0
+    
+    if (now_ts - last_rep) < 86400:
+        remaining = 86400 - (now_ts - last_rep)
+        return await event.reply(f"You can give rep again in `{await get_time(remaining)}`")
+        
+    # Give Rep
+    await users_collection.update_one(
+        {"user_id": reply_msg.sender_id, "chat_id": event.chat_id},
+        {"$inc": {"reputation": 1}},
+        upsert=True
+    )
+    
+    await users_collection.update_one(
+        {"user_id": event.sender_id, "chat_id": event.chat_id},
+        {"$set": {"last_rep_given": now_ts}},
+        upsert=True
+    )
+    
+    await event.reply(f"**+1 Reputation** to {reply_msg.sender.first_name}! 👍")
+
+@register(pattern="levelset")
+async def levelset_handler(event):
+    if not await is_admin(event, event.sender_id): return
+    
+    args = event.text.split()
+    if len(args) < 3:
+        return await event.reply("Usage: `/levelset event [multiplier]`")
+        
+    cmd = args[1].lower()
+    if cmd == "event":
+        try:
+            mult = float(args[2])
+            global _event_multiplier
+            _event_multiplier = mult
+            await event.reply(f"Global Event Multiplier set to **{mult}x**! 🎉")
+        except ValueError:
+            await event.reply("Invalid number.")
+
 
 @register(pattern="leaderboard")
 async def _leaderboard(event):
@@ -222,7 +361,8 @@ async def _leaderboard(event):
             "Levelling system is not active in this chat. To turn it on use `/level on`"
         )
     chat_id = event.chat_id
-    leaderboard = await get_leaderboard(chat_id)
+    # Default page 0
+    leaderboard = await get_leaderboard(chat_id, limit=10, skip=0)
     lmao = ""
 
     if leaderboard:
@@ -235,13 +375,44 @@ async def _leaderboard(event):
                 f"{idx}. [{first_name1}](tg://user?id={user_id}) --> {points} points\n"
             )
         lmao += "\nUse /register to setup your names."
+        
+        # Buttons
+        buttons = [
+            Button.inline("Global Leaderboard", data="gleaderboard_"),
+            Button.inline("Next ➡️", data="chatlb_10")
+        ]
     else:
         lmao += (
             "No data for this chat. Try /register to register yourself in bot first!"
         )
-    await event.reply(
-        lmao, buttons=Button.inline("Global Leaderboard", data="gleaderboard_")
-    )
+        buttons = Button.inline("Global Leaderboard", data="gleaderboard_")
+        
+    await event.reply(lmao, buttons=buttons)
+
+
+@callbackquery(pattern=r"chatlb_(\d+)")
+async def chat_lb_callback(event):
+    offset = int(event.pattern_match.group(1))
+    chat_id = event.chat_id
+    leaderboard = await get_leaderboard(chat_id, limit=10, skip=offset)
+    
+    if not leaderboard:
+        return await event.answer("No more rankings!", alert=True)
+        
+    lmao = "🏆 **Leaderboard** for this chat:\n\n"
+    for idx, user in enumerate(leaderboard, start=offset + 1):
+        points = user.get("points", 0)
+        user_id = user.get("user_id")
+        first_name1 = await _get_first_name(user_id)
+        lmao += (
+            f"{idx}. [{first_name1}](tg://user?id={user_id}) --> {points} points\n"
+        )
+            
+    buttons = []
+    if offset >= 10:
+        buttons.append(Button.inline("⬅️ Prev", data=f"chatlb_{offset - 10}"))
+    buttons.append(Button.inline("Next ➡️", data=f"chatlb_{offset + 10}"))
+    await event.edit(lmao, buttons=buttons)
 
 
 @callbackquery(pattern="gleaderboard_")
@@ -284,22 +455,45 @@ async def _daily(event):
     points = stats["points"]
     x, y = await can_collect_coins(event.sender_id, event.chat_id)
     if x is True:
+        # Streak Logic
+        now_ts = ds.datetime.now().timestamp()
+        last_ts = stats.get("last_date") or 0
+        current_streak = stats.get("streak", 0)
+        
+        # If last collection was within 48 hours (24h cooldown + 24h grace), increment streak
+        # But allow for gap? The cooldown is 24h.
+        # If they collect exactly after 24h, diff is 24h.
+        # If they wait 2 days, diff is 48h+ -> reset.
+        if 0 < (now_ts - last_ts) < (48 * 3600):
+            current_streak += 1
+        else:
+            current_streak = 1
+            
+        base_points = 100
+        streak_bonus = min(current_streak * 10, 100) # Max 100 bonus
+        total_daily = base_points + streak_bonus
+        
         await users_collection.update_one(
             {"user_id": event.sender_id, "chat_id": event.chat_id},
-            {"$set": {"points": points + 100}},
+            {
+                "$inc": {"points": total_daily},
+                "$set": {
+                    "last_date": now_ts,
+                    "streak": current_streak
+                }
+            },
             upsert=True,
         )
-        await users_collection.update_one(
-            {"user_id": event.sender_id, "chat_id": event.chat_id},
-            {"$set": {"last_date": ds.datetime.now().timestamp()}},
-            upsert=True,
-        )
-        new_points = points + 100
+        new_points = points + total_daily
         return await event.reply(
-            f"Successfully claimed daily 100 points!\n**Current points**: {new_points}"
+            f"💰 **Daily Reward Claimed!**\n"
+            f"Computed Streak: **{current_streak}** 🔥\n"
+            f"Bonus: +{streak_bonus} XP\n"
+            f"Total Received: +{total_daily} XP\n"
+            f"**Current Points**: {new_points}"
         )
     await event.reply(
-        "You can claim your daily 100 points in around`{0}`".format((await get_time(y)))
+        "You can claim your daily points in `{0}`".format((await get_time(y)))
     )
 
 
@@ -390,14 +584,57 @@ async def userstats(event):
         stats = await get_user_stats(user_id, chat_id)
     except KeyError:
         stats = None
-    "https://api.akuari.my.id/canvas/rank?avatar=https://camo.githubusercontent.com/1ad4c22d443bd0a2f7fed1eebd75f8bd2f4c7616c8e8dc31f4797135896d525b/68747470733a2f2f692e6962622e636f2f31526d524c39642f494d472d32303231313130342d3130353230392d3438382e6a7067&username=Ari&needxp=939505&bg=https://telegra.ph/file/c8b84fff99a1914b4207d.png&level=284&currxp=23284&rank=https://i.ibb.co/Wn9cvnv/FABLED.png"
+
     if stats:
-        response = f"**{stats['first_name']}'s Stats**:\n\n**Points Gained**: {stats['points']}\n**Level**: {stats['level']}\n**Rank**: {stats['rank']}"
+        # Generate Visual Rank Card
+        reply_msg = await event.reply("Generatin Rank Card...")
+        try:
+            loop = asyncio.get_running_loop()
+            
+            # Download profile photo
+            try:
+                pfp = await event.client.download_profile_photo(user_id, file=bytes)
+            except Exception:
+                pfp = None
+                
+            rank_image = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    generate_rank_card_sync,
+                    firstname=stats['first_name'],
+                    avatar_bytes=pfp,
+                    current_xp=stats['points'],
+                    total_xp=stats['next_level_xp_total'],
+                    level=stats['level'],
+                    rank_name=stats['rank']
+                )
+            )
+            rank_image.name = "rank.png"
+            
+            # Text fallback with progress bar
+            bar = get_progress_bar(stats['xp_in_level'], stats['xp_needed_level'])
+            
+            # Cooler, minimalist design
+            caption = (
+                f"**{stats['first_name']}**  •  {stats['rank']}\n"
+                f"Level {stats['level']}   `{bar}`\n"
+                f"XP: {stats['points']} / {stats['next_level_xp_total']}\n"
+            )
+            
+            await event.reply(file=rank_image, message=caption)
+            await reply_msg.delete()
+        except Exception as e:
+            LOGGER.error(f"Rank generation failed: {e}")
+            await reply_msg.edit(
+                f"**{stats['first_name']}'s Stats**:\n\n"
+                f"**Points**: {stats['points']}\n"
+                f"**Level**: {stats['level']}\n"
+                f"**Rank**: {stats['rank']}"
+            )
 
     else:
         response = "Use /register to register your name first."
-
-    await event.reply(response)
+        await event.reply(response)
 
 
 @register(pattern="register")
@@ -498,9 +735,26 @@ async def handle_message(event):
     if event.from_id:
         if not await _get_level_on(event.chat_id):
             return
+            
+        # Anti-Abuse Checks
+        if len(event.text) < 3:
+            return # Too short
+            
         if not (await is_flooding(user_id, chat_id)):
+            # XP Gain Logic with Event and Prestige Multiplier
+            global _event_multiplier
+            
+            user_doc = await users_collection.find_one(
+                {"user_id": user_id, "chat_id": chat_id}, {"prestige": 1}
+            )
+            prestige = user_doc.get("prestige", 0) if user_doc else 0
+            
+            # Multiplier: 1 + (0.1 * prestige)
+            final_mult = _event_multiplier * (1 + (0.1 * prestige))
+            points_inc = final_mult
+            
             # buffer point inc and lastmsg update
-            _points_buffer[(user_id, chat_id)] = _points_buffer.get((user_id, chat_id), 0) + 1
+            _points_buffer[(user_id, chat_id)] = _points_buffer.get((user_id, chat_id), 0) + points_inc
             _lastmsg_buffer[(user_id, chat_id)] = time.time()
             await _schedule_flush()
             # rank up check requires fresh points; read projected doc once

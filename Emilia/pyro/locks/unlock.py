@@ -2,7 +2,7 @@ from pyrogram import Client, enums
 from pyrogram.types import ChatPermissions
 
 import Emilia.strings as strings
-from Emilia import custom_filter, pgram
+from Emilia import custom_filter
 from Emilia.helper.chat_status import check_bot, check_user
 from Emilia.mongo.locks_mongo import unlock_db
 from Emilia.pyro.connection.connection import connection
@@ -65,7 +65,7 @@ async def lock(client, message):
 
     if "all" in LOCK_ITMES:
         try:
-            await pgram.set_chat_permissions(
+            await client.set_chat_permissions(
                 chat_id,
                 ChatPermissions(
                     can_send_messages=True,

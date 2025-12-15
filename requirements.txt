@@ -32,7 +32,7 @@ nekos.py
 wikipedia
 py-carbon
 catbox-uploader
-google-genai
+groq
 
 # media metadata
 hachoir
