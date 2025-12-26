@@ -729,27 +729,15 @@ async def anonymous(event, mode):
     user_id = None
     first_name = None
     e_t = None
-    if event.reply_to:
-        user = (await event.get_reply_message()).sender
-        if isinstance(user, Channel):
-            return
-        user_id = user.id
-        first_name = user.first_name
-    elif event.pattern_match.group(1):
-        u_obj = event.text.split(None, 2)[1]
-        try:
-            user = await meow.get_entity(u_obj)
-            user_id = user.id
-            first_name = user.first_name
-        except BaseException:
-            pass
     try:
-        if event.reply_to:
-            e_t = event.text.split(None, 1)[1]
-        elif user_id:
-            e_t = event.text.split(None, 2)[2]
-    except IndexError:
-        e_t = None
+        user_obj, extra = await get_user_reason(event)
+        if user_obj:
+            user_id = user_obj.id
+            first_name = user_obj.first_name
+            e_t = extra
+    except TypeError:
+        pass
+
     db[event.id] = [e_t, user_id, first_name]
     cb_data = str(event.id) + "|" + str(mode)
     a_buttons = Button.inline(

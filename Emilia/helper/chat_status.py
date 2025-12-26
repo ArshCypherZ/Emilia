@@ -8,6 +8,7 @@ from pyrogram.errors import BadRequest
 from pyrogram.types import Message
 
 from Emilia import BOT_ID, DEV_USERS
+from Emilia.utils.cache import admin_cache
 
 BOT_PERMISSIONS_STRINGS = {
     "can_delete_messages": "Looks like I haven't got the right to delete messages; mind promoting me? Thanks!",
@@ -36,6 +37,24 @@ USERS_PERMISSIONS_STRINGS = {
 }
 
 
+async def get_chat_member_cached(client, chat_id: int, user_id: int):
+    """Fetches ChatMember with caching."""
+    cache_key = f"chat_member:{chat_id}:{user_id}"
+    
+    # L1 + L2 Cache
+    cached_member = await admin_cache.get(cache_key)
+    if cached_member is not None:
+        return cached_member
+
+    # L3 API Call
+    try:
+        member = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
+        await admin_cache.set(cache_key, member, ttl=300)
+        return member
+    except Exception:
+        return None
+
+
 async def isBotAdmin(message: Message, chat_id=None, silent=False) -> bool:
     """This function returns the bot admin status in the chat.
 
@@ -50,9 +69,9 @@ async def isBotAdmin(message: Message, chat_id=None, silent=False) -> bool:
     if chat_id is None:
         chat_id = message.chat.id
 
-    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
+    member = await get_chat_member_cached(message._client, chat_id, BOT_ID)
 
-    if GetData.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    if not member or member.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         if not silent:
             await message.reply("I'm not admin here to do that.")
         return False
@@ -97,13 +116,9 @@ async def isUserAdmin(
         if message.chat.type == ChatType.PRIVATE:
             return True
 
-    global GetData
-    try:
-        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
-    except BadRequest:
-        return
+    member = await get_chat_member_cached(message._client, chat_id, user_id)
 
-    if GetData.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    if member and member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         return True
     else:
         if not silent:
@@ -117,8 +132,8 @@ async def anon_admin_checker(chat_id: int, user_id: int, client) -> bool:
     Returns:
         bool: True when user_id has chat status is admin | creator of chat.
     """
-    GetData = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
-    if GetData.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    member = await get_chat_member_cached(client, chat_id, user_id)
+    if not member or member.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
         return False
     else:
         return True
@@ -135,13 +150,12 @@ async def can_restrict_member(
     if chat_id is None:
         chat_id = message.chat.id
 
-    try:
-        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
-    except BaseException:
+    member = await get_chat_member_cached(message._client, chat_id, user_id)
+    if not member:
         return True
 
     if (
-        GetData.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]
+        member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]
     ) or user_id in DEV_USERS:
         return False
     else:
@@ -173,9 +187,9 @@ async def isUserCreator(
         if message.chat.type == ChatType.PRIVATE:
             return True
 
-    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
+    member = await get_chat_member_cached(message._client, chat_id, user_id)
 
-    if GetData.status == ChatMemberStatus.OWNER:
+    if member and member.status == ChatMemberStatus.OWNER:
         return True
     else:
         return False
@@ -201,13 +215,19 @@ async def isBotCan(
     if chat_id is None:
         chat_id = message.chat.id
 
-    GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=BOT_ID)
-    if GetData.privileges:
+    member = await get_chat_member_cached(message._client, chat_id, BOT_ID)
+    
+    # If using Pyrogram's `getattr` on privileges object:
+    if member and member.privileges and getattr(member.privileges, privileges, False):
         return True
-    else:
-        if not silent:
-            await message.reply(BOT_PERMISSIONS_STRINGS[privileges])
-        return False
+    
+    # Also check if OWNER (owners can do everything usually, but checking privileges is safer for bots)
+    if member and member.status == ChatMemberStatus.OWNER:
+         return True
+         
+    if not silent:
+        await message.reply(BOT_PERMISSIONS_STRINGS.get(privileges, "I don't have enough rights."))
+    return False
 
 
 async def isUserCan(
@@ -237,18 +257,23 @@ async def isUserCan(
     else:
         chat_id = message.chat.id
 
-    global GetData
-    try:
-        GetData = await message._client.get_chat_member(chat_id=chat_id, user_id=user_id)
-    except BadRequest:
-        return
-
-    if GetData.privileges or user_id in DEV_USERS:
+    member = await get_chat_member_cached(message._client, chat_id, user_id)
+    
+    if user_id in DEV_USERS:
         return True
-    else:
-        if not silent:
-            await message.reply(USERS_PERMISSIONS_STRINGS[privileges])
-        return False
+
+    if member:
+        if member.status == ChatMemberStatus.OWNER:
+            return True
+        
+        # Check privileges
+        if member.privileges and getattr(member.privileges, privileges, False):
+            return True
+
+    if not silent:
+        await message.reply(USERS_PERMISSIONS_STRINGS.get(privileges, "You need more rights."))
+    return False
+
 
 
 async def CheckAllAdminsStuffs(

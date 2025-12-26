@@ -610,28 +610,13 @@ async def fban(event, sender_id: int = None, anon: bool = False):
         fed_id = fedowner[0]
         fname = fedowner[1]
         owner_id = sender_id
-    if event.reply_to:
-        user = (await event.get_reply_message()).sender
-        try:
-            reason = event.text.split(None, 1)[1]
-        except BaseException:
-            reason = None
-    elif event.pattern_match.group(1):
-        u = event.text.split(None, 2)
-        try:
-            u_ent = u[1]
-            if u[1].isnumeric():
-                u_ent = int(u[1])
-            user = await meow.get_entity(u_ent)
-        except BaseException:
-            return await event.reply(
-                "I don't know who you're talking about, you're going to need to specify a user...!"
-            )
-        try:
-            reason = u[2]
-        except BaseException:
-            reason = None
-    else:
+    user = None
+    reason = None
+    try:
+        user, reason = await get_user(event)
+    except TypeError:
+        pass
+    if not user:
         return await event.reply(
             "I don't know who you're talking about, you're going to need to specify a user...!"
         )
@@ -786,28 +771,16 @@ async def unfban(event, sender_id: int = None, anon: bool = False):
         fed_id = fedowner[0]
         fname = fedowner[1]
         owner_id = sender_id
-    if event.reply_to:
-        user = (await event.get_reply_message()).sender
-        try:
-            reason = event.text.split(None, 1)[1]
-        except BaseException:
-            reason = None
-    elif event.pattern_match.group(1):
-        u = event.text.split(None, 2)
-        try:
-            u_ent = u[1]
-            if u[1].isnumeric():
-                u_ent = int(u[1])
-            user = await meow.get_entity(u_ent)
-        except BaseException:
-            return await event.reply(
-                "I don't know who you're talking about, you're going to need to specify a user...!"
-            )
-        try:
-            reason = u[2]
-        except BaseException:
-            reason = None
-    else:
+        fed_id = fedowner[0]
+        fname = fedowner[1]
+        owner_id = sender_id
+    user = None
+    reason = None
+    try:
+        user, reason = await get_user(event)
+    except TypeError:
+        pass
+    if not user:
         return await event.reply(
             "I don't know who you're talking about, you're going to need to specify a user...!"
         )

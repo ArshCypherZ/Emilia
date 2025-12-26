@@ -6,7 +6,7 @@ from datetime import datetime
 from telethon import errors, types
 from telethon.errors.rpcerrorlist import UserNotParticipantError
 from telethon.tl.functions.channels import GetParticipantRequest
-from telethon.tl.types import MessageEntityMention, MessageEntityMentionName
+from telethon.tl.types import MessageEntityMention, MessageEntityMentionName, MessageEntityTextUrl
 
 import Emilia.strings as strings
 from Emilia import DEV_USERS, db
@@ -53,7 +53,7 @@ async def get_user_reason(event):
     # Not a reply: try to resolve using entities first (supports mentions with spaces)
     entities = getattr(getattr(event, "message", event), "entities", None) or event.entities
     if entities:
-        ent = await find_instance(entities, (MessageEntityMentionName, MessageEntityMention))
+        ent = await find_instance(entities, (MessageEntityMentionName, MessageEntityMention, MessageEntityTextUrl))
         if ent:
             users = None
             if isinstance(ent, MessageEntityMentionName):
@@ -61,6 +61,10 @@ async def get_user_reason(event):
             elif isinstance(ent, MessageEntityMention):
                 token = text[ent.offset : ent.offset + ent.length]
                 users = token
+            elif isinstance(ent, MessageEntityTextUrl):
+                if ent.url.startswith("tg://user?id="):
+                    users = int(ent.url.split("=")[1])
+                
             if users is not None:
                 try:
                     user_input = await meow.get_entity(ctypeof(users))

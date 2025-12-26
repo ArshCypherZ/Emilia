@@ -20,7 +20,7 @@ services:
   restarter:
     image: docker:cli
     volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
-    command: ["/bin/sh", "-c", "while true; do sleep 30000; docker restart emilia; done"] # restart every 4 hours
+    command: ["/bin/sh", "-c", "while true; do sleep 43200; docker restart emilia; done"] # restart every 12 hours
     restart: unless-stopped
     network_mode: host
 

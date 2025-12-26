@@ -7,6 +7,8 @@ from Emilia.helper.disable import disable
 user_ = db.users
 
 
+from Emilia.helper.get_user import get_user_id
+
 @Client.on_message(custom_filter.command(commands="id", disable=True))
 @disable
 async def getid(client, message):
@@ -24,33 +26,20 @@ async def getid(client, message):
     text = f"**[Message ID:]({message.link})** `{message_id}`\n"
     text += f"**[Your ID:](tg://user?id={your_id})** `{your_id}`\n"
 
-    if len(message.text.split()) == 2:
+    # Check if there are arguments to resolve a specific user
+    text_content = message.text or ""
+    has_args = len(text_content.split()) >= 2
+    if not has_args and message.entities:
+        for ent in message.entities:
+            if ent.offset > 0:
+                has_args = True
+                break
+
+    if has_args:
         try:
-            split = message.text.split(None, 1)[1].strip()
-            if len(message.entities) >= 2:
-                if message.entities[1].type == MessageEntityType.TEXT_MENTION:
-                    split = message.entities[1].user.id
-                elif message.entities[1].type == MessageEntityType.MENTION:
-                    split = split.replace("@", "")
-                elif message.entities[1].type == MessageEntityType.URL:
-                    split = split.split("/")[-1]
-
-                database = None
-                if not isinstance(split, int):
-                    database = await user_.find_one({"user_name": split})
-
-                    if database and database["user_id"]:
-                        user_id = database["user_id"]
-                        text += f"**[User ID:](tg://user?id={user_id})** `{user_id}`\n"
-
-                    else:
-                        user_id = (await client.get_users(split)).id
-                        text += f"**[User ID:](tg://user?id={user_id})** `{user_id}`\n"
-                else:
-                    user_id = int(split)
-                    text += f"**[User ID:](tg://user?id={user_id})** `{user_id}`\n"
-            else:
-                user_id = (await client.get_users(split)).id
+            user_info = await get_user_id(message)
+            if user_info:
+                user_id = user_info.id
                 text += f"**[User ID:](tg://user?id={user_id})** `{user_id}`\n"
 
         except IndexError:

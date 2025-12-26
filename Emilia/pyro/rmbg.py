@@ -1,5 +1,5 @@
 import os
-
+import io
 import aiofiles
 from pyrogram import Client
 
@@ -22,9 +22,10 @@ async def check_filename(filroid):
         no += 1
 
 
-async def remove_background(input_file_name):
+async def remove_background(input_bytes):
     headers = {"X-API-Key": REMOVE_BG_API_KEY}
-    files = {"image_file": open(input_file_name, "rb")}
+    
+    files = {"image_file": ("image.png", input_bytes, "image/png")}
 
     resp = await post("https://api.remove.bg/v1.0/removebg", headers=headers, data=None, files=files)
 
@@ -50,25 +51,20 @@ async def remove_bg_command_handler(client, message):
         return await message.reply(
             "Reply to a photo in order for me to remove its background."
         )
-    if not os.path.exists('downloads'):
-        os.makedirs('downloads')
-    photo_path = await client.download_media(replied)
-    success, result_file = await remove_background(photo_path)
-    os.remove(photo_path)
+    
+    # Download to memory to avoid disk I/O blocking
+    photo_bytes = await client.download_media(replied, in_memory=True)
+    
+    success, result_file = await remove_background(photo_bytes)
 
     if success:
-        async with aiofiles.open(result_file, "rb") as result:
-            result_data = await result.read()
+        await message.reply_photo(photo=result_file)
+        await message.reply_document(document=result_file)
 
-        result_temp_file = "temp_result.png"
-        async with aiofiles.open(result_temp_file, "wb") as temp_file:
-            await temp_file.write(result_data)
-
-        await message.reply_photo(photo=result_temp_file),
-        await message.reply_document(document=result_temp_file),
-
-        os.remove(result_temp_file)
-        os.remove(result_file)
+        try:
+            os.remove(result_file)
+        except Exception:
+            pass
     else:
         error_title = result_file["errors"][0].get("title", "Unknown Error")
         error_detail = result_file["errors"][0].get("detail", "")
