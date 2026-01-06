@@ -22,6 +22,8 @@ from Emilia.utils.decorators import *
 # Configuration
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 MEMORY_MODEL = "llama-3.1-8b-instant"
+GUARD_MODEL = "meta-llama/llama-prompt-guard-2-86m"
+
 # Allowed models whitelist to prevent legacy data issues
 ALLOWED_MODELS = {
     "llama-3.3-70b-versatile",
@@ -35,17 +37,31 @@ DEFAULT_MAX_TOKENS = 768
 MAX_MEMORY_LEN = 1500
 MAX_SESSIONS = int(os.getenv("CHATBOT_MAX_SESSIONS", "500"))
 SESSION_TTL_SECONDS = int(os.getenv("CHATBOT_SESSION_TTL", "3600"))
+GUARD_THRESHOLD = float(os.getenv("PROMPT_GUARD_THRESHOLD", "0.5"))
 
 if not GROQ_API_KEY:
     LOGGER.warning("[GroqChat] GROQ_API_KEY missing. Feature disabled.")
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
+guard_client = AsyncGroq(api_key=GROQ_API_KEY)
 chatbotdb = db.chatbotto
 convodb = db.gemini_convos
 
 # In-memory session store
 # Key: user_id, Value: dict with chat session info
 user_chats: Dict[int, Dict[str, Any]] = {}
+
+# Deflection responses for prompt injection attempts
+DEFLECTIONS = [
+    "haan? kya bol rahe ho",
+    "sorry samajh nahi aayi baat",
+    "kuch aur baat karo na",
+    "ye sab kya hai yaar",
+    "umm what?",
+    "i don't get it",
+    "can we talk about something else?",
+    "that's confusing lol"
+]
 
 class GroqChatSession:
     """Manages conversation state for a user."""
@@ -74,6 +90,33 @@ class GroqChatSession:
             if self.history and self.history[-1]['role'] == 'user':
                 self.history.pop()
             raise e
+
+async def safeGuard(user_message: str) -> bool:
+    try:
+        result = await guard_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ],
+            model=GUARD_MODEL,
+            temperature=0.0,
+        )
+        
+        response = result.choices[0].message.content.strip().lower()
+        
+        score = float(response)
+        is_malicious = score > GUARD_THRESHOLD
+        
+        if is_malicious:
+            LOGGER.info(f"[PromptGuard] Blocked malicious input (score: {score})")
+        
+        return is_malicious
+        
+    except Exception as e:
+        LOGGER.error(f"[PromptGuard] Error checking message: {e}")
+        return False
 
 def getModelPreferences() -> List[str]:
     """Return list of preferred models from env or defaults, validated against allowed set."""
@@ -220,6 +263,11 @@ async def updateUserMemory(user_id: int, user_text: str, bot_text: str):
 
 async def handleChatRequest(event, query: str) -> Optional[str]:
     user_id = event.sender_id
+    
+    is_malicious = await safeGuard(query)
+    if is_malicious:
+        return random.choice(DEFLECTIONS)
+    
     chat, _ = await getOrCreateChat(user_id)
     
     if not chat:
