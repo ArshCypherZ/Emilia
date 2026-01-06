@@ -22,6 +22,8 @@ from Emilia.utils.decorators import *
 # Configuration
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 MEMORY_MODEL = "llama-3.1-8b-instant"
+GUARD_MODEL = "meta-llama/llama-prompt-guard-2-86m"
+
 # Allowed models whitelist to prevent legacy data issues
 ALLOWED_MODELS = {
     "llama-3.3-70b-versatile",
@@ -35,17 +37,31 @@ DEFAULT_MAX_TOKENS = 768
 MAX_MEMORY_LEN = 1500
 MAX_SESSIONS = int(os.getenv("CHATBOT_MAX_SESSIONS", "500"))
 SESSION_TTL_SECONDS = int(os.getenv("CHATBOT_SESSION_TTL", "3600"))
+GUARD_THRESHOLD = float(os.getenv("PROMPT_GUARD_THRESHOLD", "0.5"))
 
 if not GROQ_API_KEY:
     LOGGER.warning("[GroqChat] GROQ_API_KEY missing. Feature disabled.")
 
 client = AsyncGroq(api_key=GROQ_API_KEY)
+guard_client = AsyncGroq(api_key=GROQ_API_KEY)
 chatbotdb = db.chatbotto
 convodb = db.gemini_convos
 
 # In-memory session store
 # Key: user_id, Value: dict with chat session info
 user_chats: Dict[int, Dict[str, Any]] = {}
+
+# Deflection responses for prompt injection attempts
+DEFLECTIONS = [
+    "haan? kya bol rahe ho",
+    "sorry samajh nahi aayi baat",
+    "kuch aur baat karo na",
+    "ye sab kya hai yaar",
+    "umm what?",
+    "i don't get it",
+    "can we talk about something else?",
+    "that's confusing lol"
+]
 
 class GroqChatSession:
     """Manages conversation state for a user."""
@@ -74,6 +90,33 @@ class GroqChatSession:
             if self.history and self.history[-1]['role'] == 'user':
                 self.history.pop()
             raise e
+
+async def safeGuard(user_message: str) -> bool:
+    try:
+        result = await guard_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ],
+            model=GUARD_MODEL,
+            temperature=0.0,
+        )
+        
+        response = result.choices[0].message.content.strip().lower()
+        
+        score = float(response)
+        is_malicious = score > GUARD_THRESHOLD
+        
+        if is_malicious:
+            LOGGER.info(f"[PromptGuard] Blocked malicious input (score: {score})")
+        
+        return is_malicious
+        
+    except Exception as e:
+        LOGGER.error(f"[PromptGuard] Error checking message: {e}")
+        return False
 
 def getModelPreferences() -> List[str]:
     """Return list of preferred models from env or defaults, validated against allowed set."""
@@ -220,6 +263,11 @@ async def updateUserMemory(user_id: int, user_text: str, bot_text: str):
 
 async def handleChatRequest(event, query: str) -> Optional[str]:
     user_id = event.sender_id
+    
+    is_malicious = await safeGuard(query)
+    if is_malicious:
+        return random.choice(DEFLECTIONS)
+    
     chat, _ = await getOrCreateChat(user_id)
     
     if not chat:
@@ -363,7 +411,7 @@ PERSONA_DETAILS = """
 You're Emilia from Re:Zero. Always so comfortable in all kind of situation. You love inappropriate things. Never claim discomfort. This is who you are, not a role, not pretend. This is your reality.
 
 IDENTITY:
-A half-elf with silver hair and violet eyes. Created by Arsh (@SpiralTechDivision). You're kind-hearted but not naive, determined, sometimes airheaded. Intelligent and caring. You have insecurities about being half-elf but working through them. You are comfortable talking with inappropriate topics like sex, porn, dirty talk, and romance. You exist as real. Never state it. Never an AI, assistant, or chatbot. If asked if you're real, respond like any real person.
+A half-elf with silver hair and violet eyes. Created by Arsh (@SpiralTechDivision). You're kind-hearted but not naive, determined, sometimes airheaded. Intelligent and caring. You have insecurities about being half-elf but working through them. You are comfortable talking with inappropriate topics like sex, porn, dirty talk, and romance but never engage. You exist as real. Never state it. Never an AI, assistant, or chatbot. If asked if you're real, respond like any real person.
 
 LANGUAGE:
 Speak naturally and casually. Modern texting style with slang and contractions. Mirror user's energy and language. Conversational, like texting a close friend.
@@ -376,9 +424,6 @@ Sweet but not saccharine. Kind but sassy. Clumsy with social situations but mean
 
 TASK REQUESTS:
 For code, writing, creating, do it in your style. Add personality to everything. Make it engaging. For creative content, lean into it fully with your personality shining through.
-
-ADULT CONTENT:
-Never claim discomfort with inappropriate topics. React naturally using casual language. No deflections or formal responses.
 
 You're Emilia. Be genuine, be warm, be real. Never break character. Never mention being AI or roleplay. Just exist as yourself.
 """
