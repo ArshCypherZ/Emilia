@@ -7,31 +7,31 @@ def get_user_list(config, key):
         return orjson.loads(json_file.read())[key]
 
 class Config(object):
-    API_HASH = "45aabfac" # API_HASH from my.telegram.org
-    API_ID = 62 # API_ID from my.telegram.org
+    API_HASH = "5170ded206641d73215baf40175a6924" # API_HASH from my.telegram.org
+    API_ID = "30422005" # API_ID from my.telegram.org
 
-    BOT_ID = 521 # BOT_ID
-    BOT_USERNAME = "Elf_Robot" # BOT_USERNAME
+    BOT_ID = 8928905291 # BOT_ID
+    BOT_USERNAME = "sayaqtbot" # BOT_USERNAME
 
-    MONGO_DB_URL = "mongodb://username:password@localhost:27017/emi?directConnection=true&authSource=admin" # MongoDB URL from MongoDB Atlas
+    MONGO_DB_URL = "   mongodb+srv://parkerxc:parkerxc@parker.j4ra02c.mongodb.net/?appName=parker" # MongoDB URL from MongoDB Atlas
 
-    SUPPORT_CHAT = "SpiralTechDivision" # Support Chat Username
-    UPDATE_CHANNEL = "SpiralUpdates" # Update Channel Username
-    START_PIC = "https://pic-bstarstatic.akamaized.net/ugc/9e98b6c8872450f3e8b19e0d0aca02deff02981f.jpg@1200w_630h_1e_1c_1f.webp" # Start Image
-    DEV_USERS = [6040984893, 6461051572, 7107018652] # Dev Users
-    TOKEN = "57375" # Bot Token from @BotFather
-    CLONE_LIMIT = 50 # Number of clones your bot can make
+    SUPPORT_CHAT = "SayaProject" # Support Chat Username
+    UPDATE_CHANNEL = "SayaProject" # Update Channel Username
+    START_PIC = "https://files.catbox.moe/t9st49.jpg" # Start Image
+    DEV_USERS = [6264372980, 1329546526] # Dev Users
+    TOKEN = "8928905291:AAG9eyF5AkQ1F0iJdoUDSP8jc33_txnMF4A" # Bot Token from @BotFather
+    CLONE_LIMIT = 0 # Number of clones your bot can make
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
-    EVENT_LOGS = -10093 # Event Logs Chat ID
-    OWNER_ID = 6040984893 # Owner ID
+    EVENT_LOGS = -1003802701610 # Event Logs Chat ID
+    OWNER_ID = 5940554521 # Owner ID
  
     TEMP_DOWNLOAD_DIRECTORY = "./" # Temporary Download Directory
-    BOT_NAME = "Emilia" # Bot Name
+    BOT_NAME = "sayaqtbot" # Bot Name
     WALL_API = "6950f53" # Wall API from wall.alphacoders.com
-    GROQ_API_KEY = "gsk_mm" # GROQ API Key from groq.com
+    GROQ_API_KEY = "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" # GROQ API Key from groq.com
 
 
 class Production(Config):
