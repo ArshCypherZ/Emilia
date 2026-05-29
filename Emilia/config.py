@@ -13,7 +13,7 @@ class Config(object):
     BOT_ID = 8928905291 # BOT_ID
     BOT_USERNAME = "sayaqtbot" # BOT_USERNAME
 
-    MONGO_DB_URL = "   mongodb+srv://parkerxc:parkerxc@parker.j4ra02c.mongodb.net/?appName=parker" # MongoDB URL from MongoDB Atlas
+    MONGO_DB_URL = "mongodb+srv://parkerxc:parkerxc@parker.j4ra02c.mongodb.net/?appName=parker" # MongoDB URL from MongoDB Atlas
 
     SUPPORT_CHAT = "SayaProject" # Support Chat Username
     UPDATE_CHANNEL = "SayaProject" # Update Channel Username
@@ -40,3 +40,4 @@ class Production(Config):
 
 class Development(Config):
     LOGGER = True
+
