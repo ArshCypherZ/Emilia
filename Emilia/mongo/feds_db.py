@@ -1,7 +1,8 @@
-from typing import Optional, Dict, Any
+from typing import Optional
+
 from Emilia import db
-from Emilia.utils.db import find_one as db_find_one, find as db_find
 from Emilia.utils.constants import normalize_filter
+from Emilia.utils.db import find_one as db_find_one
 
 feds = db.feds
 fbans = db.fbans
@@ -50,22 +51,30 @@ async def rename_fed(fed_id, fname):
 
 async def chat_join_fed(fed_id, chat_id: int):
     # Atomic add to set to avoid duplicates
-    await feds.update_one({"fed_id": fed_id}, {"$addToSet": {"chats": chat_id}}, upsert=True)
+    await feds.update_one(
+        {"fed_id": fed_id}, {"$addToSet": {"chats": chat_id}}, upsert=True
+    )
 
 
 async def user_demote_fed(fed_id, user_id: int):
     # Atomic pull
-    await feds.update_one({"fed_id": fed_id}, {"$pull": {"fedadmins": user_id}}, upsert=True)
+    await feds.update_one(
+        {"fed_id": fed_id}, {"$pull": {"fedadmins": user_id}}, upsert=True
+    )
 
 
 async def user_join_fed(fed_id, user_id: int):
     # Atomic add to set
-    await feds.update_one({"fed_id": fed_id}, {"$addToSet": {"fedadmins": user_id}}, upsert=True)
+    await feds.update_one(
+        {"fed_id": fed_id}, {"$addToSet": {"fedadmins": user_id}}, upsert=True
+    )
 
 
 async def chat_leave_fed(fed_id, chat_id):
     # Atomic pull
-    await feds.update_one({"fed_id": fed_id}, {"$pull": {"chats": chat_id}}, upsert=True)
+    await feds.update_one(
+        {"fed_id": fed_id}, {"$pull": {"chats": chat_id}}, upsert=True
+    )
 
 
 async def get_fed_reason(fed_id):
@@ -93,7 +102,10 @@ async def unfban_user(fed_id, user_id):
     uid = str(user_id)
     await fbans.update_one(
         {"fed_id": fed_id},
-        {"$unset": {f"fbans.{uid}": ""}, "$setOnInsert": {"fed_id": fed_id, "fbans": {}}},
+        {
+            "$unset": {f"fbans.{uid}": ""},
+            "$setOnInsert": {"fed_id": fed_id, "fbans": {}},
+        },
         upsert=True,
     )
 
@@ -130,7 +142,9 @@ async def get_all_fbans(fed_id):
 async def get_chat_fed(chat_id: int) -> Optional[str]:
     # Replace collection scan with indexed array membership query
     # Ensure: index on feds.chats as sparse/multikey on int values
-    doc = await feds.find_one({"chats": normalize_filter({"chat_id": chat_id}).get("chat_id")}, {"fed_id": 1})
+    doc = await feds.find_one(
+        {"chats": normalize_filter({"chat_id": chat_id}).get("chat_id")}, {"fed_id": 1}
+    )
     if doc and doc.get("fed_id"):
         return doc["fed_id"] or None
     return None
@@ -194,8 +208,12 @@ async def get_all_fed_chats(fed_id):
 
 
 async def sub_fed(fed_id: str, my_fed: str):
-    await fsubs.update_one({"fed_id": my_fed}, {"$addToSet": {"my_subs": fed_id}}, upsert=True)
-    await fsubs.update_one({"fed_id": fed_id}, {"$addToSet": {"fed_subs": my_fed}}, upsert=True)
+    await fsubs.update_one(
+        {"fed_id": my_fed}, {"$addToSet": {"my_subs": fed_id}}, upsert=True
+    )
+    await fsubs.update_one(
+        {"fed_id": fed_id}, {"$addToSet": {"fed_subs": my_fed}}, upsert=True
+    )
 
 
 async def get_all_subscribed_feds(fed_id):
@@ -206,8 +224,12 @@ async def get_all_subscribed_feds(fed_id):
 
 
 async def unsub_fed(fed_id: str, my_fed: str):
-    await fsubs.update_one({"fed_id": my_fed}, {"$pull": {"my_subs": fed_id}}, upsert=True)
-    await fsubs.update_one({"fed_id": fed_id}, {"$pull": {"fed_subs": my_fed}}, upsert=True)
+    await fsubs.update_one(
+        {"fed_id": my_fed}, {"$pull": {"my_subs": fed_id}}, upsert=True
+    )
+    await fsubs.update_one(
+        {"fed_id": fed_id}, {"$pull": {"fed_subs": my_fed}}, upsert=True
+    )
 
 
 async def get_my_subs(fed_id):

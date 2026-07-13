@@ -28,6 +28,7 @@ async def delete_birthday(user_id: int):
     await birthday_collection.delete_one({"user_id": user_id})
 
 
-async def get_birthdays_by_date(day: int, month: int):
-    cursor = birthday_collection.find({"day": day, "month": month})
-    return await cursor.to_list(length=None)
+def get_birthdays_by_date(day: int, month: int):
+    """Return a cursor of birthdays on this date; stream it with `async for`
+    rather than materializing the whole day's list."""
+    return birthday_collection.find({"day": day, "month": month})

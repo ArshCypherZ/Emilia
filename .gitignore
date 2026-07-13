@@ -1,0 +1,10 @@
+*.pyc
+*.session
+*.session-journal
+*.bson
+*.csv
+analysis/*
+reports/*
+__pycache__/
+**/__pycache__/
+pwd.txt

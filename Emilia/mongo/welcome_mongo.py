@@ -90,9 +90,7 @@ async def UnSetGoodbye(chat_id):
 
 
 async def GetGoobye(chat_id):
-    doc = await welcome.find_one(
-        {"chat_id": chat_id}, {"_id": 0, "goodbye_message": 1}
-    )
+    doc = await welcome.find_one({"chat_id": chat_id}, {"_id": 0, "goodbye_message": 1})
     if doc and doc.get("goodbye_message") and "text" in doc["goodbye_message"]:
         gm = doc["goodbye_message"]
         return (gm.get("content"), gm.get("text"), gm.get("data_type"))
@@ -211,7 +209,7 @@ async def SetCaptchaText(chat_id, captcha_text):
                     "captcha_kick_time": None,
                     "users_welcomeIDs": [],
                     "verified_users": [],
-                }
+                },
             }
         },
         upsert=True,
@@ -237,7 +235,7 @@ async def SetCaptchaMode(chat_id, captcha_mode):
                     "captcha_kick_time": None,
                     "users_welcomeIDs": [],
                     "verified_users": [],
-                }
+                },
             }
         },
         upsert=True,
@@ -272,7 +270,9 @@ async def SetUserCaptchaMessageIDs(chat_id, user_id, message_id):
     )
 
 
-async def SetCaptchaTextandChances(chat_id, user_id, captcha_text, chances, captcha_list):
+async def SetCaptchaTextandChances(
+    chat_id, user_id, captcha_text, chances, captcha_list
+):
     await welcome.update_one(
         {"chat_id": chat_id, "captcha.users_welcomeIDs.user_id": user_id},
         {
@@ -328,7 +328,9 @@ async def DeleteUsercaptchaData(chat_id, user_id):
 
 async def AppendVerifiedUsers(chat_id, user_id):
     await welcome.update_one(
-        {"chat_id": chat_id}, {"$addToSet": {"captcha.verified_users": user_id}}, upsert=True
+        {"chat_id": chat_id},
+        {"$addToSet": {"captcha.verified_users": user_id}},
+        upsert=True,
     )
 
 
@@ -357,7 +359,5 @@ async def setRuleCaptcha(chat_id: int, rule_captcha: bool):
 
 
 async def isRuleCaptcha(chat_id: int) -> bool:
-    doc = await welcome.find_one(
-        {"chat_id": chat_id}, {"_id": 0, "rule_captcha": 1}
-    )
+    doc = await welcome.find_one({"chat_id": chat_id}, {"_id": 0, "rule_captcha": 1})
     return doc.get("rule_captcha", False) if doc else False

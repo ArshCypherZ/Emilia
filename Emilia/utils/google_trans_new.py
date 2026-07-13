@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import aiohttp
 import urllib3
+
 from Emilia.helper.http import get_aiohttp_session
 
 LANGUAGES = {
@@ -446,7 +447,7 @@ class google_translator:
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         }
         freq = self._package_rpc(text, lang_src, lang_tgt)
-        
+
         try:
             # Use shared session; pass per-request proxy and timeout.
             proxy = None
@@ -454,7 +455,14 @@ class google_translator:
                 proxy = self.proxies.get("http") or self.proxies.get("https")
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             session = await get_aiohttp_session()
-            async with session.post(self.url, data=freq, headers=headers, ssl=False, proxy=proxy, timeout=timeout) as r:
+            async with session.post(
+                self.url,
+                data=freq,
+                headers=headers,
+                ssl=False,
+                proxy=proxy,
+                timeout=timeout,
+            ) as r:
                 async for line in r.content.iter_chunked(1024):
                     decoded_line = line.decode("utf-8")
                     if "MkEWBc" in decoded_line:
@@ -484,7 +492,11 @@ class google_translator:
                                 elif pronounce:
                                     pronounce_src = response_[0][0]
                                     pronounce_tgt = response_[1][0][0][1]
-                                    return [translate_text, pronounce_src, pronounce_tgt]
+                                    return [
+                                        translate_text,
+                                        pronounce_src,
+                                        pronounce_tgt,
+                                    ]
                             elif len(response) == 2:
                                 sentences = []
                                 for i in response:
@@ -503,7 +515,7 @@ class google_translator:
         except aiohttp.ClientResponseError as e:
             # Request successful, bad response
             raise google_new_transError(tts=self, response=None)
-        except Exception as e:
+        except Exception:
             # Request failed
             raise google_new_transError(tts=self)
 
@@ -521,14 +533,21 @@ class google_translator:
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         }
         freq = self._package_rpc(text)
-        
+
         try:
             proxy = None
             if self.proxies:
                 proxy = self.proxies.get("http") or self.proxies.get("https")
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             session = await get_aiohttp_session()
-            async with session.post(self.url, data=freq, headers=headers, ssl=False, proxy=proxy, timeout=timeout) as r:
+            async with session.post(
+                self.url,
+                data=freq,
+                headers=headers,
+                ssl=False,
+                proxy=proxy,
+                timeout=timeout,
+            ) as r:
                 async for line in r.content.iter_chunked(1024):
                     decoded_line = line.decode("utf-8")
                     if "MkEWBc" in decoded_line:

@@ -25,6 +25,7 @@ This module allows you to do that easily, by exposing some common actions, so ev
 • /tmute: Temporarily mute a user. Example time values: 4m = 4 minutes, 3h = 3 hours, 6d = 6 days, 5w = 5 weeks.
 • /unmute: Unmute a user.
 • /unmuteall: Unmute All Muted Users.
+Muted users cannot send messages or react to messages until they are unmuted.
 
 • /kick: Kick a user.
 • /dkick: Kick a user by reply, and delete their message.

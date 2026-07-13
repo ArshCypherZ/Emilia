@@ -21,6 +21,9 @@ class Config(object):
     DEV_USERS = [6040984893, 6461051572, 7107018652] # Dev Users
     TOKEN = "57375" # Bot Token from @BotFather
     CLONE_LIMIT = 50 # Number of clones your bot can make
+    CLONES_PER_USER = 2 # number of clones per user
+    CLONE_PREMIUM_ENABLED = True
+    CLONE_PREMIUM_STARS = 100
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
@@ -32,6 +35,12 @@ class Config(object):
     BOT_NAME = "Emilia" # Bot Name
     WALL_API = "6950f53" # Wall API from wall.alphacoders.com
     GROQ_API_KEY = "gsk_mm" # GROQ API Key from groq.com
+
+    CARTESIA_API_KEY = "sk_car_" # cartesia api key for voice chatbot from cartesia.ai
+
+    ANILIST_CLIENT = 100
+    ANILIST_SECRET = "NTRA"
+    ANILIST_REDIRECT_URL = "https://anilist.co/api/v2/oauth/pin"
 
 
 class Production(Config):

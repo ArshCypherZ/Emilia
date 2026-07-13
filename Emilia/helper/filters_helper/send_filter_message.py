@@ -1,11 +1,16 @@
 from asyncio import sleep
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pyrogram.errors import FloodWait
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Message, ReplyParameters
 
 from Emilia import BOT_USERNAME
-from Emilia.helper.button_gen import button_markdown_parser
+from Emilia.helper.button_gen import (
+    button_has_styles,
+    button_markdown_parser,
+    buttons_to_bot_api_markup,
+)
 from Emilia.helper.note_helper.note_fillings import NoteFillings
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
+from Emilia.helper.telegram_api import send_message as bot_api_send_message
 from Emilia.utils.decorators import rate_limit
 
 @rate_limit((10, 5))
@@ -37,14 +42,23 @@ async def SendFilterMessage(
         reply_markup = None
 
     if data_type == 1:
+        if button_has_styles(buttons):
+            await bot_api_send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=buttons_to_bot_api_markup(buttons),
+                reply_to_message_id=message_id,
+                disable_web_page_preview=preview,
+            )
+            return
         try:
             await client.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-            reply_to_message_id=message_id,
-            disable_web_page_preview=preview,
-        )
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                reply_parameters=ReplyParameters(message_id=message_id),
+                link_preview_options=LinkPreviewOptions(is_disabled=preview),
+            )
         except FloodWait as e:
             await sleep(e.value)
 
@@ -53,7 +67,7 @@ async def SendFilterMessage(
             chat_id=chat_id,
             sticker=content,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 3:
@@ -62,7 +76,7 @@ async def SendFilterMessage(
             caption=text,
             animation=content,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 4:
@@ -71,7 +85,7 @@ async def SendFilterMessage(
             document=content,
             caption=text,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 5:
@@ -80,7 +94,7 @@ async def SendFilterMessage(
             photo=content,
             caption=text,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 6:
@@ -89,7 +103,7 @@ async def SendFilterMessage(
             audio=content,
             caption=text,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 7:
@@ -98,7 +112,7 @@ async def SendFilterMessage(
             voice=content,
             caption=text,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 8:
@@ -107,7 +121,7 @@ async def SendFilterMessage(
             video=content,
             caption=text,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )
 
     elif data_type == 9:
@@ -115,5 +129,5 @@ async def SendFilterMessage(
             chat_id=chat_id,
             video_note=content,
             reply_markup=reply_markup,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
         )

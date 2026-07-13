@@ -2,7 +2,47 @@ import re
 
 from pyrogram.types import InlineKeyboardButton
 
-BTN_URL_REGEX = re.compile(r"(\[([^\[]+?)\]\(buttonurl:(?:/{0,2})(.+?)(:same)?\))")
+BUTTON_STYLES = {"primary", "danger", "success"}
+BTN_URL_REGEX = re.compile(
+    r"(\[([^\[]+?)\]\(buttonurl(?:#(primary|danger|success))?:(?:/{0,2})(.+?)(:same)?\))",
+    flags=re.IGNORECASE,
+)
+
+
+class StyledInlineKeyboardButton(InlineKeyboardButton):
+    def __init__(self, *args, style=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style = style if style in BUTTON_STYLES else None
+
+
+def _normalize_button_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        return url
+    if re.match(r"(?i)^(https?://|tg://)", url):
+        return url
+    return f"https://{url}"
+
+
+def button_has_styles(buttons) -> bool:
+    return any(getattr(button, "style", None) for row in buttons for button in row)
+
+
+def buttons_to_bot_api_markup(buttons):
+    inline_keyboard = []
+    for row in buttons:
+        inline_row = []
+        for button in row:
+            data = {"text": button.text}
+            if getattr(button, "url", None):
+                data["url"] = button.url
+            if getattr(button, "callback_data", None):
+                data["callback_data"] = button.callback_data
+            if getattr(button, "style", None):
+                data["style"] = button.style
+            inline_row.append(data)
+        inline_keyboard.append(inline_row)
+    return {"inline_keyboard": inline_keyboard}
 
 
 def button_markdown_parser(text):
@@ -21,14 +61,17 @@ def button_markdown_parser(text):
             to_check -= 1
 
         if n_escapes % 2 == 0:
-            if bool(match.group(4)) and buttons:
-                buttons[-1].append(
-                    [InlineKeyboardButton(text=match.group(2), url=match.group(3))]
-                )
+            style = (match.group(3) or "").lower() or None
+            url = _normalize_button_url(match.group(4))
+            button = StyledInlineKeyboardButton(
+                text=match.group(2),
+                url=url,
+                style=style,
+            )
+            if bool(match.group(5)) and buttons:
+                buttons[-1].append(button)
             else:
-                buttons.append(
-                    [InlineKeyboardButton(text=match.group(2), url=match.group(3))]
-                )
+                buttons.append([button])
             text_data += markdown_note[prev : match.start(1)]
             prev = match.end(1)
         else:

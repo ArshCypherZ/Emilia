@@ -19,6 +19,7 @@ These commands are solely made for admins of group chats!
 • /setgtitle `<custom title>`: Set group's title.
 • /setdesc `<custom description>`: Set a group's description.
 • /setsticker `<reply to a sticker pack>`: Set a group's sticker pack.
+• /slowmode `<seconds>`: Set slow mode (0, 5, 10, 30, 60, 300, 900 or 3600). Omit the value to check the current setting.
 
 • /anonadmin `<yes/no/on/off>`: Allow anonymous admins to use all commands without checking their permissions. Not recommended.
 """

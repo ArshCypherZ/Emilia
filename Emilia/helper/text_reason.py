@@ -43,7 +43,7 @@ async def extract_user_and_reason(message, sender_chat=False):
     text = message.text
     user = None
     reason = None
-    
+
     # Reply case
     if message.reply_to_message:
         reply = message.reply_to_message
@@ -72,10 +72,10 @@ async def extract_user_and_reason(message, sender_chat=False):
     target_entity = None
     if entities:
         for ent in entities:
-             if ent.offset > 0:
-                 target_entity = ent
-                 break
-    
+            if ent.offset > 0:
+                target_entity = ent
+                break
+
     if target_entity:
         # Extract user from entity
         user_id = None
@@ -84,18 +84,21 @@ async def extract_user_and_reason(message, sender_chat=False):
         elif target_entity.type == MessageEntityType.MENTION:
             # We need to extract the text to resolve it? extract_userid does get_users(text)
             # Text coverage:
-            e_text = text[target_entity.offset : target_entity.offset + target_entity.length]
+            e_text = text[
+                target_entity.offset : target_entity.offset + target_entity.length
+            ]
             user_id = (await message._client.get_users(e_text)).id
         elif target_entity.type == MessageEntityType.TEXT_LINK:
-             if target_entity.url.startswith("tg://user?id="):
-                 user_id = int(target_entity.url.split("=")[1])
-        
-        if user_id:
-             # Extract reason
-             end_offset = target_entity.offset + target_entity.length
-             reason = text[end_offset:].strip() or None
-             return user_id, reason
+            if target_entity.url.startswith("tg://user?id="):
+                user_id = int(target_entity.url.split("=")[1])
 
+        if user_id:
+            # Extract reason
+            end_offset = target_entity.offset + target_entity.length
+            reason = text[end_offset:].strip() or None
+            return user_id, reason
+
+    # Fallback to split logic if no entity found (e.g. ID or simple username without entity)
     # if not reply to a message and no reason is given
     if len(args) == 2:
         user = text.split(None, 1)[1]

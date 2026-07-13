@@ -20,4 +20,6 @@ async def nsfw_off(chat_id: int):
     if not await is_nsfw_on(chat_id):
         return
     # Idempotent create; relies on unique index on chat_id
-    return await nsfwdb.update_one({"chat_id": chat_id}, {"$setOnInsert": {"chat_id": chat_id}}, upsert=True)
+    return await nsfwdb.update_one(
+        {"chat_id": chat_id}, {"$setOnInsert": {"chat_id": chat_id}}, upsert=True
+    )

@@ -4,7 +4,12 @@ filters = db.filters
 
 
 async def add_filter_db(
-    chat_id: int, filter_name: str, content: str, text: str, data_type: int, reply_to_sender: bool = False
+    chat_id: int,
+    filter_name: str,
+    content: str,
+    text: str,
+    data_type: int,
+    reply_to_sender: bool = False,
 ):
     # Try to update existing filter by name
     res = await filters.update_one(
@@ -62,11 +67,19 @@ async def get_filter(chat_id: int, filter_name: str):
     )
     if doc and doc.get("filters"):
         f = doc["filters"][0]
-        return (f.get("filter_name"), f.get("content"), f.get("text"), f.get("data_type"), f.get("reply_to_sender", False))
+        return (
+            f.get("filter_name"),
+            f.get("content"),
+            f.get("text"),
+            f.get("data_type"),
+            f.get("reply_to_sender", False),
+        )
 
 
 async def get_filters_list(chat_id: int):
-    doc = await filters.find_one({"chat_id": chat_id}, {"_id": 0, "filters.filter_name": 1})
+    doc = await filters.find_one(
+        {"chat_id": chat_id}, {"_id": 0, "filters.filter_name": 1}
+    )
     if doc and doc.get("filters"):
         return [f.get("filter_name") for f in doc["filters"] if f.get("filter_name")]
     else:

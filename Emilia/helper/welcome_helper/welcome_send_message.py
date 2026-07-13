@@ -1,7 +1,12 @@
 from Emilia import BOT_USERNAME
+from Emilia.helper.button_gen import (
+    button_has_styles,
+    buttons_to_bot_api_markup,
+)
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
+from Emilia.helper.telegram_api import send_message as bot_api_send_message
 from Emilia.helper.welcome_helper.welcome_fillings import Welcomefillings
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 
 
 async def SendWelcomeMessage(
@@ -27,11 +32,20 @@ async def SendWelcomeMessage(
     SentMessage = None
 
     if data_type == 1:
+        if reply_markup is not None:
+            buttons = getattr(reply_markup, "inline_keyboard", None)
+            if buttons and button_has_styles(buttons):
+                return await bot_api_send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=buttons_to_bot_api_markup(buttons),
+                    disable_web_page_preview=preview,
+                )
         SentMessage = await client.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=reply_markup,
-            disable_web_page_preview=preview,
+            link_preview_options=LinkPreviewOptions(is_disabled=preview),
         )
 
     elif data_type == 2:

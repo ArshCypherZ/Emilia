@@ -30,4 +30,5 @@ To slow them down, you could try enabling CAPTCHAs. New users joining your chat 
 
 **NOTE**:
 For CAPTCHAs to be enabled, you MUST have enabled welcome messages. If you disable welcome messages, CAPTCHAs will also stop.
+Users waiting for CAPTCHA verification cannot send messages or react to messages.
 """

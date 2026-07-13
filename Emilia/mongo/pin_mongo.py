@@ -17,7 +17,9 @@ async def get_cleanlinked(chat_id: int) -> bool:
 
 async def antichannelpin_db(chat_id: int, antichannelpin: bool) -> None:
     await pin.update_one(
-        {"chat_id": chat_id}, {"$set": {"antichannelpin": bool(antichannelpin)}}, upsert=True
+        {"chat_id": chat_id},
+        {"$set": {"antichannelpin": bool(antichannelpin)}},
+        upsert=True,
     )
 
 

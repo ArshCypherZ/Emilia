@@ -1,13 +1,15 @@
 """
 Async HTTP helper to replace requests with aiohttp
 """
+
 import asyncio
-import random
 import os
+import random
 from urllib.parse import urlparse
 
 import aiohttp
-from Emilia.helper.http import get_aiohttp_session, close_http_clients
+
+from Emilia.helper.http import close_http_clients, get_aiohttp_session
 
 
 class AsyncResponse:
@@ -63,7 +65,11 @@ class AsyncResponse:
 
 def _default_headers_for(url: str) -> dict:
     parsed = urlparse(url)
-    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else None
+    origin = (
+        f"{parsed.scheme}://{parsed.netloc}"
+        if parsed.scheme and parsed.netloc
+        else None
+    )
     hdrs = {
         "User-Agent": (
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -121,10 +127,17 @@ def _coerce_requests_style_files(kwargs: dict) -> dict:
         # Try to derive a filename if not provided
         if filename is None:
             name_attr = getattr(fileobj, "name", None)
-            filename = os.path.basename(name_attr) if isinstance(name_attr, str) else field
+            filename = (
+                os.path.basename(name_attr) if isinstance(name_attr, str) else field
+            )
 
         if content_type is not None:
-            form.add_field(field, fileobj, filename=os.path.basename(str(filename)), content_type=content_type)
+            form.add_field(
+                field,
+                fileobj,
+                filename=os.path.basename(str(filename)),
+                content_type=content_type,
+            )
         else:
             form.add_field(field, fileobj, filename=os.path.basename(str(filename)))
 
@@ -133,16 +146,26 @@ def _coerce_requests_style_files(kwargs: dict) -> dict:
     return kwargs
 
 
-async def _request_with_retries(method: str, url: str, *, headers: dict | None = None, timeout: int | float = 15,
-                                retries: int = 3, backoff: float = 1.5, **kwargs) -> AsyncResponse:
-    # Merge default headers with any provided ones (caller headers take priority)
+async def _request_with_retries(
+    method: str,
+    url: str,
+    *,
+    headers: dict | None = None,
+    timeout: int | float = 15,
+    retries: int = 3,
+    backoff: float = 1.5,
+    **kwargs,
+) -> AsyncResponse:
+    # Merge default headers with any provided ones (caller headers take
+    # priority)
     merged_headers = {**_default_headers_for(url), **(headers or {})}
 
     # Coerce requests-style multipart if present
     has_files = "files" in kwargs
     if has_files:
         kwargs = _coerce_requests_style_files(kwargs)
-        # Avoid retrying multipart with file objects to prevent consumed streams issues
+        # Avoid retrying multipart with file objects to prevent consumed
+        # streams issues
         retries = 1
 
     close_fileobjs = kwargs.pop("_close_fileobjs", [])
@@ -154,21 +177,32 @@ async def _request_with_retries(method: str, url: str, *, headers: dict | None =
             try:
                 timeout_cfg = aiohttp.ClientTimeout(total=float(timeout))
                 session = await get_aiohttp_session()
-                async with session.request(method.upper(), url, timeout=timeout_cfg, headers=merged_headers, **kwargs) as response:
+                async with session.request(
+                    method.upper(),
+                    url,
+                    timeout=timeout_cfg,
+                    headers=merged_headers,
+                    **kwargs,
+                ) as response:
                     content = await response.read()
                     status = response.status
-                    # Retry on 429 and 5xx; some sites also 403 without UA — retry once.
-                    if status in (429,) or 500 <= status < 600 or (status == 403 and attempt < retries - 1):
-                        await asyncio.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.2))
+                    # Retry on 429 and 5xx; some sites also 403 without UA —
+                    # retry once.
+                    if (
+                        status in (429,)
+                        or 500 <= status < 600
+                        or (status == 403 and attempt < retries - 1)
+                    ):
+                        await asyncio.sleep(
+                            backoff * (2**attempt) + random.uniform(0, 0.2)
+                        )
                         continue
                     return AsyncResponse(response, content)
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                last_exc = e
                 if attempt == retries - 1:
                     break
-                await asyncio.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.2))
-            except Exception as e:
-                last_exc = e
+                await asyncio.sleep(backoff * (2**attempt) + random.uniform(0, 0.2))
+            except Exception:
                 break
     finally:
         # Best-effort close any file objects we were passed
@@ -177,7 +211,8 @@ async def _request_with_retries(method: str, url: str, *, headers: dict | None =
                 fo.close()
             except Exception:
                 pass
-    # If all retries failed, return an empty response to let callers handle gracefully
+    # If all retries failed, return an empty response to let callers handle
+    # gracefully
     return AsyncResponse(None, None)
 
 

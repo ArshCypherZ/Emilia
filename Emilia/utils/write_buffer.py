@@ -1,7 +1,10 @@
 import asyncio
 import datetime
+
 from pymongo import UpdateOne
-from Emilia import db, LOGGER
+
+from Emilia import LOGGER, db
+
 
 class WriteBuffer:
     def __init__(self, flush_interval=5):
@@ -32,7 +35,15 @@ class WriteBuffer:
         await self._flush()
         LOGGER.info("WriteBuffer stopped and flushed.")
 
-    async def add_user(self, user_id, username=None, chat_id=None, chat_title=None, forwarded=False, bot_id=None):
+    async def add_user(
+        self,
+        user_id,
+        username=None,
+        chat_id=None,
+        chat_title=None,
+        forwarded=False,
+        bot_id=None,
+    ):
         async with self.lock:
             if user_id not in self.users_buffer:
                 self.users_buffer[user_id] = {
@@ -40,18 +51,21 @@ class WriteBuffer:
                     "chats": {},
                     "bot_ids": set(),
                 }
-            
+
             entry = self.users_buffer[user_id]
             if username:
                 entry["username"] = username
-            
+
             if not forwarded and chat_id is not None:
                 if chat_id not in entry["chats"]:
-                    entry["chats"][chat_id] = {"chat_id": chat_id, "chat_title": chat_title}
+                    entry["chats"][chat_id] = {
+                        "chat_id": chat_id,
+                        "chat_title": chat_title,
+                    }
                 else:
                     if chat_title:
                         entry["chats"][chat_id]["chat_title"] = chat_title
-            
+
             if bot_id:
                 entry["bot_ids"].add(bot_id)
 
@@ -60,26 +74,29 @@ class WriteBuffer:
             if chat_id not in self.chats_buffer:
                 self.chats_buffer[chat_id] = {
                     "chat_title": chat_title,
-                    "bot_ids": set()
+                    "bot_ids": set(),
                 }
-            
+
             entry = self.chats_buffer[chat_id]
             if chat_title:
                 entry["chat_title"] = chat_title
-            
+
             if bot_id:
                 entry["bot_ids"].add(bot_id)
 
     async def _loop(self):
         while self.running:
             await asyncio.sleep(self.flush_interval)
-            await self._flush()
+            try:
+                await self._flush()
+            except Exception:
+                LOGGER.exception("WriteBuffer flush failed; retrying next interval")
 
     async def _flush(self):
         async with self.lock:
             if not self.users_buffer and not self.chats_buffer:
                 return
-            
+
             users_to_write = self.users_buffer
             chats_to_write = self.chats_buffer
             self.users_buffer = {}
@@ -87,27 +104,28 @@ class WriteBuffer:
 
         if users_to_write:
             requests = []
-            current_time = datetime.datetime.now()
+            current_time = datetime.datetime.now(datetime.timezone.utc)
 
             for user_id, data in users_to_write.items():
-                update_doc = {
-                    "$set": {"username": data["username"]},
-                    "$setOnInsert": {"first_found_date": current_time},
-                }
-                
+                update_doc = {"$setOnInsert": {"first_found_date": current_time}}
+                if data["username"]:
+                    update_doc["$set"] = {"username": data["username"]}
+
                 unique_chats = list(data["chats"].values())
                 if unique_chats:
-                    update_doc["$addToSet"] = {
-                        "chats": {"$each": unique_chats}
-                    }
-                
-                if data["bot_ids"]:
-                     if "$addToSet" not in update_doc:
-                         update_doc["$addToSet"] = {}
-                     update_doc["$addToSet"]["bot_ids"] = {"$each": list(data["bot_ids"])}
+                    update_doc["$addToSet"] = {"chats": {"$each": unique_chats}}
 
-                requests.append(UpdateOne({"user_id": user_id}, update_doc, upsert=True))
-            
+                if data["bot_ids"]:
+                    if "$addToSet" not in update_doc:
+                        update_doc["$addToSet"] = {}
+                    update_doc["$addToSet"]["bot_ids"] = {
+                        "$each": list(data["bot_ids"])
+                    }
+
+                requests.append(
+                    UpdateOne({"user_id": user_id}, update_doc, upsert=True)
+                )
+
             if requests:
                 try:
                     await db.users.bulk_write(requests, ordered=False)
@@ -117,17 +135,20 @@ class WriteBuffer:
 
         if chats_to_write:
             requests = []
-            current_time = datetime.datetime.now()
+            current_time = datetime.datetime.now(datetime.timezone.utc)
             for chat_id, data in chats_to_write.items():
-                update_doc = {
-                    "$set": {"chat_title": data["chat_title"]},
-                    "$setOnInsert": {"first_found_date": current_time},
-                }
-                
+                update_doc = {"$setOnInsert": {"first_found_date": current_time}}
+                if data["chat_title"]:
+                    update_doc["$set"] = {"chat_title": data["chat_title"]}
+
                 if data["bot_ids"]:
-                    update_doc["$addToSet"] = {"bot_ids": {"$each": list(data["bot_ids"])}}
-                
-                requests.append(UpdateOne({"chat_id": chat_id}, update_doc, upsert=True))
+                    update_doc["$addToSet"] = {
+                        "bot_ids": {"$each": list(data["bot_ids"])}
+                    }
+
+                requests.append(
+                    UpdateOne({"chat_id": chat_id}, update_doc, upsert=True)
+                )
 
             if requests:
                 try:

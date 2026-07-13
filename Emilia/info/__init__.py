@@ -1,5 +1,6 @@
 import os
 from os.path import basename, dirname, isfile
+
 from Emilia import LOGGER
 
 
@@ -17,8 +18,13 @@ def getListOfFiles(dirName):
     return allFiles
 
 
+# Derive the commands/ dir from this file, not os.getcwd(): launching from any
+# directory other than the repo root previously loaded zero command modules.
+commands_dir = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "modules", "commands"
+)
 mod_paths = getListOfFiles(dirName=dirname(__file__)) + getListOfFiles(
-    dirName=dirname(os.getcwd() + "/Emilia/tele/__init__.py")
+    dirName=commands_dir
 )
 
 all_modules = [
@@ -33,6 +39,7 @@ module_names = [
     if isfile(f) and f.endswith(".py") and not f.endswith("__init__.py")
 ]
 
-LOGGER.error(("INFO - " f"{', '.join(module_names)} - MODULES LOADED"))
+LOGGER.debug(f"{', '.join(module_names)} - MODULES LOADED")
 ALL_MODULES = sorted(all_modules)
+LOGGER.info(f"{len(ALL_MODULES)} modules discovered.")
 __all__ = ALL_MODULES + ["ALL_MODULES"]

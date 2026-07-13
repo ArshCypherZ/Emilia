@@ -1,21 +1,29 @@
-import aiohttp
-from aiohttp import ClientSession
+import asyncio
 from typing import Optional
 
+import aiohttp
 import orjson
+from aiohttp import ClientSession
 
-# Lazily initialized clients to avoid creating event-loop-bound objects at import time
+# Lazily initialized clients to avoid creating event-loop-bound objects at
+# import time
 _aiohttp_session: Optional[ClientSession] = None
+_session_lock = asyncio.Lock()
 
 
 async def _get_aiohttp_session() -> ClientSession:
     global _aiohttp_session
     if _aiohttp_session is None or _aiohttp_session.closed:
-        connector = aiohttp.TCPConnector(ttl_dns_cache=300, limit_per_host=100)
-        _aiohttp_session = ClientSession(
-            connector=connector,
-            json_serialize=lambda x: orjson.dumps(x).decode(),
-        )
+        # Serialize creation so concurrent first-callers don't build two
+        # sessions.
+        async with _session_lock:
+            if _aiohttp_session is None or _aiohttp_session.closed:
+                connector = aiohttp.TCPConnector(ttl_dns_cache=300, limit_per_host=100)
+                _aiohttp_session = ClientSession(
+                    connector=connector,
+                    json_serialize=lambda x: orjson.dumps(x).decode(),
+                    timeout=aiohttp.ClientTimeout(total=30),
+                )
     return _aiohttp_session
 
 

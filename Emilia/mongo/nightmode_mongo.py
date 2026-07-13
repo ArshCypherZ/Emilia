@@ -4,11 +4,13 @@ nightdb = db.nightmode
 
 
 async def nightmode_on(chat_id: int):
-    return nightdb.update_one({"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True)
+    return await nightdb.update_one(
+        {"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True
+    )
 
 
 async def nightmode_off(chat_id: int):
-    return nightdb.delete_one({"chat_id": chat_id})
+    return await nightdb.delete_one({"chat_id": chat_id})
 
 
 async def get_nightchats() -> list:

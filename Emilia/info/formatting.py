@@ -9,9 +9,13 @@ You can format your message using bold, italics, underline, and much more. Go ah
 • _italic words_: Underscores are used for italic fonts. Shows as: italic words.
 • *bold words*: Asterisks are used for bold fonts. Shows as: bold words.
 • ~strikethrough~: Tildes are used for strikethrough. Shows as: strikethrough.
-• [hyperlink] (sempai.me): This is the formatting used for hyperlinks. Shows as: hyperlink.
+• [hyperlink] (arshjaved.in): This is the formatting used for hyperlinks. Shows as: hyperlink.
 
-• [My button] (buttonurl://sempai.me): This is the formatting used for creating buttons. This example will create a button named "My button" which opens `sempai.me` when clicked.
+• [My button](buttonurl://arshjaved.in): This is the formatting used for creating buttons. This example will create a button named "My button" which opens `arshjaved.in` when clicked.
+Button styles are also supported:
+• [Save] (buttonurl#primary://example.com)
+• [Delete] (buttonurl#danger://example.com)
+• [Done] (buttonurl#success://example.com)
 If you would like to send buttons on the same row, use the :same formatting. EG:
 [button 1] (buttonurl://example.com)
 [button 2] (buttonurl://example.com:same)
