@@ -5,7 +5,8 @@ __mod_name__ = "Filters"
 __help__ = f"""
 Make your chat more lively with filters; The bot will reply to certain words!
 
-Filters are case insensitive; every time someone says your trigger words, {BOT_NAME} will reply something else! can be used to create your own commands, if desired.
+Filters are case insensitive; every time someone says your trigger words, {BOT_NAME} will reply something else!
+Dice messages can also match dice triggers such as the dice emoji, `dice:6`, or `🎲:6`.
 
 **Commands**:
 

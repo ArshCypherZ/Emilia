@@ -94,7 +94,3 @@ Join us in making Emilia even better!
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## Credits: [ArshCypherZ](https://github.com/ArshCypherZ) and [Pranav Ajay](https://github.com/itspranavajay)
-
----

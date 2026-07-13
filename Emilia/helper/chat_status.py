@@ -2,12 +2,11 @@
 
 from typing import List, Union
 
-from pyrogram import enums
 from pyrogram.enums import ChatMemberStatus, ChatType
-from pyrogram.errors import BadRequest
+from pyrogram.errors import PeerIdInvalid, UserNotParticipant
 from pyrogram.types import Message
 
-from Emilia import BOT_ID, DEV_USERS
+from Emilia import BOT_ID, DEV_USERS, LOGGER
 from Emilia.utils.cache import admin_cache
 
 BOT_PERMISSIONS_STRINGS = {
@@ -37,10 +36,49 @@ USERS_PERMISSIONS_STRINGS = {
 }
 
 
+def _verified_user_id(message):
+    return getattr(message, "_emilia_verified_user_id", None) or getattr(
+        message, "_emilia_bot2bot_reviewer_id", None
+    )
+
+
+def _status(member) -> str:
+    """Status name for either a cached dict or a fresh ChatMember object."""
+    if member is None:
+        return ""
+    if isinstance(member, dict):
+        return member.get("status") or ""
+    return member.status.name
+
+
+def _priv(member, name: str) -> bool:
+    """Privilege flag for either a cached dict or a fresh ChatMember object."""
+    if member is None:
+        return False
+    if isinstance(member, dict):
+        return bool((member.get("privileges") or {}).get(name, False))
+    return bool(member.privileges and getattr(member.privileges, name, False))
+
+
+def _perm(member, name: str):
+    """Restricted-member permission flag (or None if unknown) for dict/object."""
+    if member is None:
+        return None
+    if isinstance(member, dict):
+        perms = member.get("permissions")
+        return perms.get(name) if perms else None
+    perms = getattr(member, "permissions", None)
+    return getattr(perms, name, None) if perms else None
+
+
 async def get_chat_member_cached(client, chat_id: int, user_id: int):
-    """Fetches ChatMember with caching."""
+    """Fetches a ChatMember with caching.
+
+    Returns a minimal JSON-serializable dict ({"status", "privileges"}) so the
+    L2 (Redis/orjson) cache never has to serialize a live Pyrogram object.
+    """
     cache_key = f"chat_member:{chat_id}:{user_id}"
-    
+
     # L1 + L2 Cache
     cached_member = await admin_cache.get(cache_key)
     if cached_member is not None:
@@ -49,10 +87,31 @@ async def get_chat_member_cached(client, chat_id: int, user_id: int):
     # L3 API Call
     try:
         member = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
-        await admin_cache.set(cache_key, member, ttl=300)
-        return member
-    except Exception:
+    except UserNotParticipant:
+        # Expected/frequent - the user simply isn't in the chat, not an error.
         return None
+    except PeerIdInvalid:
+        LOGGER.debug(f"get_chat_member_cached({chat_id},{user_id}): peer not cached yet")
+        return None
+    except Exception as exc:
+        LOGGER.warning(f"get_chat_member_cached({chat_id},{user_id}) failed: {exc}")
+        return None
+
+    payload = {
+        "status": member.status.name,
+        "privileges": (
+            {k: v for k, v in vars(member.privileges).items() if isinstance(v, bool)}
+            if member.privileges
+            else None
+        ),
+        "permissions": (
+            {k: v for k, v in vars(member.permissions).items() if isinstance(v, bool)}
+            if getattr(member, "permissions", None)
+            else None
+        ),
+    }
+    await admin_cache.set(cache_key, payload, ttl=300)
+    return payload
 
 
 async def isBotAdmin(message: Message, chat_id=None, silent=False) -> bool:
@@ -71,7 +130,7 @@ async def isBotAdmin(message: Message, chat_id=None, silent=False) -> bool:
 
     member = await get_chat_member_cached(message._client, chat_id, BOT_ID)
 
-    if not member or member.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    if not member or _status(member) not in ("OWNER", "ADMINISTRATOR"):
         if not silent:
             await message.reply("I'm not admin here to do that.")
         return False
@@ -98,7 +157,10 @@ async def isUserAdmin(
     """
 
     if user_id is None:
-        if message.sender_chat:
+        verified_user_id = _verified_user_id(message)
+        if verified_user_id is not None:
+            user_id = verified_user_id
+        elif message.sender_chat:
             user_id = message.sender_chat.id
             chat_id = message.chat.id
             if user_id == chat_id:
@@ -118,7 +180,7 @@ async def isUserAdmin(
 
     member = await get_chat_member_cached(message._client, chat_id, user_id)
 
-    if member and member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    if member and _status(member) in ("OWNER", "ADMINISTRATOR"):
         return True
     else:
         if not silent:
@@ -126,14 +188,18 @@ async def isUserAdmin(
         return False
 
 
-async def anon_admin_checker(chat_id: int, user_id: int, client) -> bool:
+async def anon_admin_checker(
+    chat_id: int, user_id: int, client, owner_only: bool = False
+) -> bool:
     """This function returns user_id chat status
 
     Returns:
         bool: True when user_id has chat status is admin | creator of chat.
     """
     member = await get_chat_member_cached(client, chat_id, user_id)
-    if not member or member.status not in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
+    if owner_only:
+        return bool(member and _status(member) == "OWNER")
+    if not member or _status(member) not in ("OWNER", "ADMINISTRATOR"):
         return False
     else:
         return True
@@ -154,9 +220,7 @@ async def can_restrict_member(
     if not member:
         return True
 
-    if (
-        member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]
-    ) or user_id in DEV_USERS:
+    if (_status(member) in ("OWNER", "ADMINISTRATOR")) or user_id in DEV_USERS:
         return False
     else:
         return True
@@ -171,7 +235,10 @@ async def isUserCreator(
         bool: True when user's chat status is creator.
     """
     if user_id is None:
-        if message.sender_chat:
+        verified_user_id = _verified_user_id(message)
+        if verified_user_id is not None:
+            user_id = verified_user_id
+        elif message.sender_chat:
             user_id = message.sender_chat.id
             chat_id = message.chat.id
             if user_id == chat_id:
@@ -189,7 +256,7 @@ async def isUserCreator(
 
     member = await get_chat_member_cached(message._client, chat_id, user_id)
 
-    if member and member.status == ChatMemberStatus.OWNER:
+    if member and _status(member) == "OWNER":
         return True
     else:
         return False
@@ -216,17 +283,19 @@ async def isBotCan(
         chat_id = message.chat.id
 
     member = await get_chat_member_cached(message._client, chat_id, BOT_ID)
-    
-    # If using Pyrogram's `getattr` on privileges object:
-    if member and member.privileges and getattr(member.privileges, privileges, False):
+
+    if member and _priv(member, privileges):
         return True
-    
-    # Also check if OWNER (owners can do everything usually, but checking privileges is safer for bots)
-    if member and member.status == ChatMemberStatus.OWNER:
-         return True
-         
+
+    # Also check if OWNER (owners can do everything usually, but checking
+    # privileges is safer for bots)
+    if member and _status(member) == "OWNER":
+        return True
+
     if not silent:
-        await message.reply(BOT_PERMISSIONS_STRINGS.get(privileges, "I don't have enough rights."))
+        await message.reply(
+            BOT_PERMISSIONS_STRINGS.get(privileges, "I don't have enough rights.")
+        )
     return False
 
 
@@ -243,7 +312,10 @@ async def isUserCan(
         bool: True when user has permission of given permission in the chat.
     """
     if user_id is None:
-        if message.sender_chat:
+        verified_user_id = _verified_user_id(message)
+        if verified_user_id is not None:
+            user_id = verified_user_id
+        elif message.sender_chat:
             user_id = message.sender_chat.id
             chat_id = message.chat.id
             if user_id == chat_id:
@@ -258,22 +330,23 @@ async def isUserCan(
         chat_id = message.chat.id
 
     member = await get_chat_member_cached(message._client, chat_id, user_id)
-    
+
     if user_id in DEV_USERS:
         return True
 
     if member:
-        if member.status == ChatMemberStatus.OWNER:
+        if _status(member) == "OWNER":
             return True
-        
+
         # Check privileges
-        if member.privileges and getattr(member.privileges, privileges, False):
+        if _priv(member, privileges):
             return True
 
     if not silent:
-        await message.reply(USERS_PERMISSIONS_STRINGS.get(privileges, "You need more rights."))
+        await message.reply(
+            USERS_PERMISSIONS_STRINGS.get(privileges, "You need more rights.")
+        )
     return False
-
 
 
 async def CheckAllAdminsStuffs(
@@ -294,18 +367,17 @@ async def CheckAllAdminsStuffs(
     """
     if not chat_id:
         chat_id = message.chat.id
-    if message.sender_chat:
+    verified_user_id = _verified_user_id(message)
+    if message.sender_chat and verified_user_id is None:
         user_id = message.sender_chat.id
         if user_id == chat_id:
             return True
         else:
             return False
 
-    user_id = message.from_user.id
-
-    if message.chat.type == ChatType.PRIVATE and not str(chat_id).startswith('-100'):
+    if message.chat.type == ChatType.PRIVATE and not str(chat_id).startswith("-100"):
         await message.reply(
-            "This command is made to be used in group chats, not in pm!", quote=True
+            "This command is made to be used in group chats, not in pm!"
         )
         return False
 
@@ -349,7 +421,8 @@ async def CheckAdmins(message: Message, silent: bool = False) -> bool:
     Returns:
         bool: True when both are admins.
     """
-    if message.sender_chat:
+    verified_user_id = _verified_user_id(message)
+    if message.sender_chat and verified_user_id is None:
         user_id = message.sender_chat.id
         chat_id = message.chat.id
 
@@ -358,11 +431,10 @@ async def CheckAdmins(message: Message, silent: bool = False) -> bool:
         else:
             return False
 
-    user_id = message.from_user.id
     chat_id = message.chat.id
     if message.chat.type == ChatType.PRIVATE:
         await message.reply(
-            "This command is made to be used in group chats, not in pm!", quote=True
+            "This command is made to be used in group chats, not in pm!"
         )
         return
 
@@ -385,16 +457,11 @@ async def isUserBanned(chat_id: int, user_id: int, client) -> bool:
     Returns:
         bool: True when user is banned in the given chat.
     """
-    data_list = client.get_chat_members(
-        chat_id=chat_id, filter=enums.ChatMembersFilter.BANNED
-    )
-    async for user in data_list:
-        if user is not None:
-            try:
-                if user_id == user.user_id:
-                    return True
-            except AttributeError:
-                pass
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    return bool(member and member.status == ChatMemberStatus.BANNED)
 
 
 async def check_user(
@@ -402,22 +469,29 @@ async def check_user(
     privileges: Union[str, List[str]] = "can_change_info",
     silent: bool = False,
     pm_mode: bool = False,
+    chat_id: int = None,
 ) -> bool:
     """This function check user's chat status as well as user's privileges in the chat.
 
     Returns:
         bool: True when user's chat status is admin or creator and user has privileges in the chat.
     """
-    if not await isUserAdmin(message, silent=silent, pm_mode=pm_mode):
+    if not await isUserAdmin(
+        message, silent=silent, pm_mode=pm_mode, chat_id=chat_id
+    ):
         return False
 
     if isinstance(privileges, list):
         for permission in privileges:
-            if not await isUserCan(message, privileges=permission, silent=silent):
+            if not await isUserCan(
+                message, privileges=permission, silent=silent, chat_id=chat_id
+            ):
                 return False
 
     elif isinstance(privileges, str):
-        if not await isUserCan(message, privileges=privileges, silent=silent):
+        if not await isUserCan(
+            message, privileges=privileges, silent=silent, chat_id=chat_id
+        ):
             return False
 
     return True
@@ -427,21 +501,26 @@ async def check_bot(
     message: Message,
     privileges: Union[str, List[str]] = "can_change_info",
     silent: bool = False,
+    chat_id: int = None,
 ) -> bool:
     """This function check bot's chat status as well as user's privileges in the chat.
 
     Returns:
         bool: True when bot's chat status is admin and bot has privileges in the chat.
     """
-    if not await isBotAdmin(message, silent=silent):
+    if not await isBotAdmin(message, silent=silent, chat_id=chat_id):
         return False
 
     if isinstance(privileges, list):
         for permission in privileges:
-            if not await isBotCan(message, privileges=permission, silent=silent):
+            if not await isBotCan(
+                message, privileges=permission, silent=silent, chat_id=chat_id
+            ):
                 return False
     else:
-        if not await isBotCan(message, privileges=privileges, silent=silent):
+        if not await isBotCan(
+            message, privileges=privileges, silent=silent, chat_id=chat_id
+        ):
             return False
 
     return True

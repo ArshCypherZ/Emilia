@@ -8,12 +8,17 @@ Sometimes a lil bit of horni-stuff is fine, check this module for fine stuff!
 • /rmnsfw: To Deactivate NSFW commands. (for groups)
 
 **Following are the NSFW commands**:
-• /nsfwwaifu
-• /blowjob
-• /nwaifu
-• /bj
-• /trap
-• /nsfwneko
-• /nneko
-• /spank
+• /nsfwneko (or /nneko)
+• /blowjob (or /bj)
+• /anal
+• /cum
+• /fuck
+• /pussylick
+• /solo
+• /solomale
+• /threesomefff
+• /threesomeffm
+• /threesomemmf
+• /yaoi
+• /yuri
 """

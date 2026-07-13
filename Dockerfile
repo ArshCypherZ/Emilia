@@ -14,10 +14,15 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-RUN pip3 install --no-cache-dir -U -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN useradd -m emilia && chown -R emilia /app
+USER emilia
+
 STOPSIGNAL SIGTERM
+
+HEALTHCHECK CMD python3 -c "import os,sys,time; p='/tmp/emilia_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<600 else 1)"
 
 CMD ["python3", "-u", "-m", "Emilia"]

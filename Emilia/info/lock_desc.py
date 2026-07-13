@@ -39,5 +39,9 @@ There are lots of different locks, and some of them might not be super clear; th
 • video: Video media messages.
 • videonote: Videonote media messages.
 • voice: Voice messages.
+• reaction: Reactions added to messages. Non-admin, non-approved user reactions are removed.
+• outsidereaction: Reactions from users who are not members of the group.
+• guestbot: Messages sent through Telegram guest bots. Allowlist trusted guest bots if needed.
+• emojicustom: Messages containing custom emoji. Use `/allowlist emojipack:<>` while replying to a custom emoji message to allow a pack.
 
 """

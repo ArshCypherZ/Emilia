@@ -5,7 +5,9 @@ disable = db.disable
 
 async def disable_db(chat_id, disable_arg):
     await disable.update_one(
-        {"chat_id": chat_id}, {"$addToSet": {"disabled_items": disable_arg}}, upsert=True
+        {"chat_id": chat_id},
+        {"$addToSet": {"disabled_items": disable_arg}},
+        upsert=True,
     )
 
 

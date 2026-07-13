@@ -6,11 +6,14 @@ user_warnings = db.user_warnings
 
 async def warn_db(chat_id, admin_id, user_id, reason):
     # Determine next warn_id per (chat_id,user_id) by counting existing docs
-    # Use retry-on-duplicate to handle concurrent inserts safely under unique index
+    # Use retry-on-duplicate to handle concurrent inserts safely under unique
+    # index
     attempts = 0
     while attempts < 5:
         attempts += 1
-        warn_count = await user_warnings.count_documents({"chat_id": chat_id, "user_id": user_id})
+        warn_count = await user_warnings.count_documents(
+            {"chat_id": chat_id, "user_id": user_id}
+        )
         new_warn_id = warn_count + 1
         try:
             await user_warnings.insert_one(
@@ -52,7 +55,9 @@ async def warn_limit(chat_id):
 
 
 async def count_user_warn(chat_id, user_id):
-    warn_count = await user_warnings.count_documents({"chat_id": chat_id, "user_id": user_id})
+    warn_count = await user_warnings.count_documents(
+        {"chat_id": chat_id, "user_id": user_id}
+    )
     return warn_count
 
 
@@ -83,7 +88,9 @@ async def get_warn_mode(chat_id):
 
 
 async def get_all_warn_reason(chat_id, user_id) -> list:
-    warns = user_warnings.find({"chat_id": chat_id, "user_id": user_id}, {"warn_id": 1, "reason": 1})
+    warns = user_warnings.find(
+        {"chat_id": chat_id, "user_id": user_id}, {"warn_id": 1, "reason": 1}
+    )
     REASONS = []
     async for warn in warns:
         warn_id = warn.get("warn_id")

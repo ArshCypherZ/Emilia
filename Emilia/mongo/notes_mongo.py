@@ -90,7 +90,9 @@ async def isNoteExist(chat_id, note_name) -> bool:
 
 async def NoteList(chat_id) -> list:
     names = []
-    doc = await notes.find_one({"chat_id": chat_id}, {"notes.text": 1, "notes.note_name": 1})
+    doc = await notes.find_one(
+        {"chat_id": chat_id}, {"notes.text": 1, "notes.note_name": 1}
+    )
     if doc and doc.get("notes"):
         for note in doc["notes"]:
             NoteText = note.get("text") or ""
@@ -124,5 +126,6 @@ async def is_pnote_on(chat_id) -> bool:
 
 
 async def ClearAllNotes(chat_id):
-    # Use correct MongoDB $unset semantics: the value is ignored, but should not be an array
+    # Use correct MongoDB $unset semantics: the value is ignored, but should
+    # not be an array
     await notes.update_one({"chat_id": chat_id}, {"$unset": {"notes": ""}})

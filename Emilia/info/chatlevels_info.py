@@ -1,5 +1,3 @@
-from Emilia import BOT_NAME
-
 __mod_name__ = "Rankings"
 
 __sub_mod__ = ["Karma"]

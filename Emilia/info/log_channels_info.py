@@ -15,6 +15,6 @@ Setting a log channel is done by the following steps:
 
 **Admin commands:**
 • /logchannel: Get the name of the current log channel.
-• /setlog: Set the log channel for the current chat.
+• /setlog: Set the log channel for the current chat. Only the group owner can use this; anonymous owners will be asked to confirm with a button.
 • /unsetlog: Unset the log channel for the current chat.
 """

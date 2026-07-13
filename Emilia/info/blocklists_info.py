@@ -7,6 +7,7 @@ From blocking rude words, filenames/extensions, to specific emoji, everything is
 
 **Admin commands:**
 • /addblocklist `<blocklist trigger> <reason>`: Add a blocklist trigger. You can blocklist an entire sentence by putting it in "quotes".
+• /addblocklist emojipack:<>: Reply to a message with custom emoji to blocklist every custom emoji pack used in that message.
 • /rmblocklist `<blocklist trigger>`: Remove a blocklist trigger.
 • /unblocklistall: Remove all blocklist triggers • chat creator only.
 • /blocklist: List all blocklisted items.
@@ -18,6 +19,8 @@ From blocking rude words, filenames/extensions, to specific emoji, everything is
 Top tip:
 Blocklists allow you to use some modifiers to match "unknown" characters. For example, you can use the ? character to match a single occurrence of any non-whitespace character.
 You could also use the * modifier, which matches any number of any character. If you want to blocklist urls, this will allow you to match the full thing. It matches every character except spaces. This is cool if you want to block, for example, url shorteners.
+
+Custom emoji pack blocklists are useful when spam uses premium emoji instead of normal text.
 """
 
 

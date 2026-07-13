@@ -31,12 +31,16 @@ async def user_global_karma(user_id) -> int:
 
 
 async def is_karma_on(chat_id: int) -> bool:
-    doc = await karmadb.find_one({"chat_id_toggle": chat_id}, {"_id": 0, "chat_id_toggle": 1})
+    doc = await karmadb.find_one(
+        {"chat_id_toggle": chat_id}, {"_id": 0, "chat_id_toggle": 1}
+    )
     return bool(doc)
 
 
 async def karma_on(chat_id: int):
-    await karmadb.update_one({"chat_id_toggle": chat_id}, {"$set": {"chat_id_toggle": chat_id}}, upsert=True)
+    await karmadb.update_one(
+        {"chat_id_toggle": chat_id}, {"$set": {"chat_id_toggle": chat_id}}, upsert=True
+    )
 
 
 async def karma_off(chat_id: int):

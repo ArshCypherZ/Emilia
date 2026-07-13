@@ -1,8 +1,6 @@
 import html
 
 
-
-
 async def Welcomefillings(message, message_text, NewUserJson):
     if NewUserJson is not None:
         user_id = NewUserJson.id

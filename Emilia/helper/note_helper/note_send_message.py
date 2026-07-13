@@ -1,14 +1,19 @@
 import html
 import re
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Message, ReplyParameters
 
 from Emilia import BOT_USERNAME
-from Emilia.helper.button_gen import button_markdown_parser
+from Emilia.helper.button_gen import (
+    button_has_styles,
+    button_markdown_parser,
+    buttons_to_bot_api_markup,
+)
 from Emilia.helper.note_helper.note_fillings import NoteFillings
 from Emilia.helper.note_helper.note_misc_helper import preview_text_replace
+from Emilia.helper.telegram_api import send_message as bot_api_send_message
 from Emilia.mongo.notes_mongo import GetNote
-from Emilia.pyro.connection.connection import connection
+from Emilia.modules.plugins.connection.connection import connection
 
 
 async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id: int):
@@ -62,19 +67,29 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
         reply_markup = None
 
     if data_type == 1:
+        if button_has_styles(buttons):
+            await bot_api_send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_to_message_id=message_id,
+                reply_markup=buttons_to_bot_api_markup(buttons),
+                disable_web_page_preview=preview,
+                parse_mode="HTML",
+            )
+            return
         await client.send_message(
             chat_id=chat_id,
             text=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
-            disable_web_page_preview=preview,
+            link_preview_options=LinkPreviewOptions(is_disabled=preview),
         )
 
     elif data_type == 2:
         await client.send_sticker(
             chat_id=chat_id,
             sticker=content,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -83,7 +98,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             animation=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -92,7 +107,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             document=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -101,7 +116,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             photo=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -110,7 +125,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             audio=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
     elif data_type == 7:
@@ -118,7 +133,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             voice=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -127,7 +142,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
             chat_id=chat_id,
             video=content,
             caption=text,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -135,7 +150,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
         await client.send_video_note(
             chat_id=chat_id,
             video_note=content,
-            reply_to_message_id=message_id,
+            reply_parameters=ReplyParameters(message_id=message_id),
             reply_markup=reply_markup,
         )
 
@@ -155,5 +170,4 @@ async def exceNoteMessageSender(client, message, note_name, from_chat_id=None):
                 "The notedata was incorrect, please update it. The buttons are most likely to be broken. If you are sure you aren't doing anything wrong and this was unexpected - please report it in my support chat.\n"
                 f"**Error:** `{e}`"
             ),
-            quote=True,
-        )
+            )

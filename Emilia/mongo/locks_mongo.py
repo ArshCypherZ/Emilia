@@ -9,7 +9,14 @@ async def lock_db(chat_id, lock_item):
     # First ensure the document exists
     await locks.update_one(
         {"chat_id": chat_id},
-        {"$setOnInsert": {"chat_id": chat_id, "lockwarns": True, "allow_list": [], "locked": []}},
+        {
+            "$setOnInsert": {
+                "chat_id": chat_id,
+                "lockwarns": True,
+                "allow_list": [],
+                "locked": [],
+            }
+        },
         upsert=True,
     )
     # Then add the lock item to the existing document
@@ -41,7 +48,10 @@ async def lockwarns_db(chat_id) -> bool:
 async def set_lockwarn_db(chat_id, warn_args):
     await locks.update_one(
         {"chat_id": chat_id},
-        {"$set": {"lockwarns": warn_args}, "$setOnInsert": {"locked": [], "allow_list": []}},
+        {
+            "$set": {"lockwarns": warn_args},
+            "$setOnInsert": {"locked": [], "allow_list": []},
+        },
         upsert=True,
     )
 
@@ -50,7 +60,14 @@ async def allowlist_db(chat_id, allowlist_arg):
     # First ensure the document exists
     await locks.update_one(
         {"chat_id": chat_id},
-        {"$setOnInsert": {"chat_id": chat_id, "locked": [], "lockwarns": True, "allow_list": []}},
+        {
+            "$setOnInsert": {
+                "chat_id": chat_id,
+                "locked": [],
+                "lockwarns": True,
+                "allow_list": [],
+            }
+        },
         upsert=True,
     )
     # Then add the allowlist item to the existing document
@@ -61,11 +78,15 @@ async def allowlist_db(chat_id, allowlist_arg):
 
 
 async def rmallow_db(chat_id, allow_arg):
-    await locks.update_one({"chat_id": chat_id}, {"$pull": {"allow_list": allow_arg}}, upsert=True)
+    await locks.update_one(
+        {"chat_id": chat_id}, {"$pull": {"allow_list": allow_arg}}, upsert=True
+    )
 
 
 async def rmallowall_db(chat_id):
-    await locks.update_one({"chat_id": chat_id}, {"$set": {"allow_list": []}}, upsert=True)
+    await locks.update_one(
+        {"chat_id": chat_id}, {"$set": {"allow_list": []}}, upsert=True
+    )
 
 
 async def get_allowlist(chat_id) -> list:

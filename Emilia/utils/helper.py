@@ -2,8 +2,8 @@ import asyncio
 import json
 import os
 import shlex
-from collections import deque
 import tempfile
+from collections import deque
 from datetime import datetime
 from os.path import basename
 from time import time
@@ -11,7 +11,6 @@ from traceback import format_exc as err
 from typing import Optional, Tuple
 from uuid import uuid4
 
-from Emilia.utils.async_http import post
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pyrogram import Client
 from pyrogram.enums import ChatType
@@ -23,7 +22,9 @@ from pyrogram.types import (
     Message,
 )
 
-from Emilia import DEV_USERS, DOWN_PATH, EVENT_LOGS, anibot, LOGGER
+from Emilia import DEV_USERS, DOWN_PATH, EVENT_LOGS, LOGGER, pgram
+from Emilia.utils.ads import reset_ad_context, set_ad_context
+from Emilia.utils.async_http import post
 from Emilia.utils.db import get_collection
 
 AUTH_USERS = get_collection("AUTH_USERS")
@@ -57,26 +58,28 @@ def control_user(func):
         chat_id = message.chat.id
         chat_type = message.chat.type
         user_id = message.from_user.id if message.from_user else message.chat.id
-        
+
         # Parallelize DB checks
         group_check_task = None
         if chat_type in [ChatType.SUPERGROUP, ChatType.GROUP]:
             group_check_task = GROUPS.find_one({"_id": chat_id})
-        
+
         ignore_check_task = IGNORE.find_one({"_id": user_id})
-        
+
         # Execute DB checks concurrently
         results = await asyncio.gather(
             group_check_task if group_check_task else asyncio.sleep(0),
-            ignore_check_task
+            ignore_check_task,
         )
-        
+
         group_data = results[0]
         ignore_data = results[1]
 
         if group_check_task and not group_data:
             gidtitle = message.chat.username or message.chat.title
-            await GROUPS.update_one({"_id": chat_id}, {"$set": {"grp": gidtitle}}, upsert=True)
+            await GROUPS.update_one(
+                {"_id": chat_id}, {"$set": {"grp": gidtitle}}, upsert=True
+            )
             await clog(
                 "Emilia",
                 f"Bot added to a new group\n\n{gidtitle}\nID: `{chat_id}`",
@@ -90,26 +93,29 @@ def control_user(func):
         if user_id not in DEV_USERS:
             try:
                 from Emilia import redis_client
+
                 key = f"spam_check:{user_id}"
-                
+
                 # Check last message time
                 last_time = await redis_client.get(key)
                 current_time = time()
-                
+
                 if last_time and (current_time - float(last_time) < 1.2):
                     # Increment spam count
                     count_key = f"spam_count:{user_id}"
                     spam_count = await redis_client.incr(count_key)
-                    await redis_client.expire(count_key, 10) # 10s expiry
-                    
+                    await redis_client.expire(count_key, 10)  # 10s expiry
+
                     if spam_count == 3:
                         await message.reply_text(
                             ("Stop spamming bot!!!" + "\nElse you will be blacklisted"),
                         )
                         await clog("Emilia", f"UserID: {user_id}", "SPAM")
-                    
+
                     if spam_count >= 5:
-                        await IGNORE.update_one({"_id": user_id}, {"$set": {"_id": user_id}}, upsert=True)
+                        await IGNORE.update_one(
+                            {"_id": user_id}, {"$set": {"_id": user_id}}, upsert=True
+                        )
                         await message.reply_text(
                             (
                                 "You have been exempted from using this bot "
@@ -120,22 +126,27 @@ def control_user(func):
                         )
                         await clog("Emilia", f"UserID: {user_id}", "BAN")
                         return
-                    
+
                     # Wait based on spam count to slow them down
                     await asyncio.sleep(spam_count)
                 else:
                     # Reset spam count if gap is large enough
                     await redis_client.delete(f"spam_count:{user_id}")
-                
+
                 # Update last message time
                 await redis_client.set(key, current_time, ex=5)
-                
-            except Exception:
-                pass
 
-        # Convert message to dict for compatibility with functions expecting mdata
+            except Exception:
+                LOGGER.warning("Antispam redis update failed", exc_info=True)
+
+        # Convert message to dict for compatibility with functions expecting
+        # mdata
         mdata = json.loads(str(message))
-        
+        ad_token = set_ad_context(
+            chat_id,
+            chat_type in [ChatType.SUPERGROUP, ChatType.GROUP],
+        )
+
         try:
             await func(_, message, mdata)
         except FloodWait as e:
@@ -157,6 +168,8 @@ def control_user(func):
                 )
             except Exception:
                 await clog("Emilia", e, "FAILURE", msg=message)
+        finally:
+            reset_ad_context(ad_token)
 
     return wrapper
 
@@ -166,11 +179,11 @@ def check_user(func):
         user_id = c_q.from_user.id
         if await IGNORE.find_one({"_id": user_id}):
             return
-            
+
         cq_data = c_q.data
         cqowner_is_ch = False
         cqowner = cq_data.split("_").pop()
-        
+
         if "-100" in cqowner:
             cqowner_is_ch = True
             ccdata = await CC.find_one({"_id": cqowner})
@@ -183,7 +196,7 @@ def check_user(func):
                 cqowner_int = int(cqowner)
             except ValueError:
                 cqowner_int = 0
-            user_valid = (user_id == cqowner_int)
+            user_valid = user_id == cqowner_int
 
         if user_id in DEV_USERS or user_valid:
             if user_id not in DEV_USERS:
@@ -200,7 +213,8 @@ def check_user(func):
                     pass
                 USER_JSON[user_id] = nt
             try:
-                await func(_, c_q)
+                cdata = json.loads(str(c_q))
+                await func(_, c_q, cdata)
             except FloodWait as e:
                 await asyncio.sleep(_fw_delay_seconds(e))
             except MessageNotModified:
@@ -357,13 +371,13 @@ async def return_json_senpai(
 
 def cflag(country):
     if country == "JP":
-        return "\U0001F1EF\U0001F1F5"
+        return "\U0001f1ef\U0001f1f5"
     if country == "CN":
-        return "\U0001F1E8\U0001F1F3"
+        return "\U0001f1e8\U0001f1f3"
     if country == "KR":
-        return "\U0001F1F0\U0001F1F7"
+        return "\U0001f1f0\U0001f1f7"
     if country == "TW":
-        return "\U0001F1F9\U0001F1FC"
+        return "\U0001f1f9\U0001f1fc"
 
 
 def pos_no(no):
@@ -409,36 +423,46 @@ async def clog(
     if cq:
         data += str(cq)
         data += "\n\n\n\n"
-    await anibot.send_message(chat_id=EVENT_LOGS, text=log)
+    await pgram.send_message(chat_id=EVENT_LOGS, text=log)
     if msg or cq:
         try:
-            with tempfile.NamedTemporaryFile("w", delete=False, prefix="query_data_", suffix=".txt") as output:
+            with tempfile.NamedTemporaryFile(
+                "w", delete=False, prefix="query_data_", suffix=".txt"
+            ) as output:
                 output.write(data)
                 tmp_path = output.name
-            await anibot.send_document(EVENT_LOGS, tmp_path)
+            await pgram.send_document(EVENT_LOGS, tmp_path)
         finally:
             try:
                 os.remove(tmp_path)
             except Exception as e:
-                LOGGER.warning(f"clog: failed to remove temp query file {tmp_path}: {e}")
+                LOGGER.warning(
+                    f"clog: failed to remove temp query file {tmp_path}: {e}"
+                )
     if replied:
         try:
-            media = replied.photo or replied.sticker or replied.animation or replied.video
-            media_path = await anibot.download_media(media)
-            await anibot.send_document(EVENT_LOGS, media_path)
+            media = (
+                replied.photo or replied.sticker or replied.animation or replied.video
+            )
+            media_path = await pgram.download_media(media)
+            await pgram.send_document(EVENT_LOGS, media_path)
         finally:
             try:
                 os.remove(media_path)
             except Exception as e:
-                LOGGER.warning(f"clog: failed to remove temp media file {media_path}: {e}")
+                LOGGER.warning(
+                    f"clog: failed to remove temp media file {media_path}: {e}"
+                )
     if file:
-        await anibot.send_document(EVENT_LOGS, file)
+        await pgram.send_document(EVENT_LOGS, file)
     if send_as_file is not None:
         try:
-            with tempfile.NamedTemporaryFile("w", delete=False, prefix="dataInQuestion_", suffix=".txt") as text_file:
+            with tempfile.NamedTemporaryFile(
+                "w", delete=False, prefix="dataInQuestion_", suffix=".txt"
+            ) as text_file:
                 text_file.write(send_as_file)
                 tf_path = text_file.name
-            await anibot.send_document(EVENT_LOGS, tf_path)
+            await pgram.send_document(EVENT_LOGS, tf_path)
         finally:
             try:
                 os.remove(tf_path)
@@ -579,7 +603,7 @@ def get_btns(
                 buttons.append(
                     [
                         InlineKeyboardButton(
-                            text="Next",
+                            text="》",
                             callback_data=(
                                 f"page_{media}{qry}_{int(lspage)+1}_{str(auth)}_{user}"
                             ),
@@ -593,7 +617,7 @@ def get_btns(
                 buttons.append(
                     [
                         InlineKeyboardButton(
-                            text="Prev",
+                            text="《",
                             callback_data=(
                                 f"page_{media}{qry}_{int(lspage)-1}_{str(auth)}_{user}"
                             ),
@@ -604,13 +628,13 @@ def get_btns(
                 buttons.append(
                     [
                         InlineKeyboardButton(
-                            text="Prev",
+                            text="《",
                             callback_data=(
                                 f"page_{media}{qry}_{int(lspage)-1}_{str(auth)}_{user}"
                             ),
                         ),
                         InlineKeyboardButton(
-                            text="Next",
+                            text="》",
                             callback_data=(
                                 f"page_{media}{qry}_{int(lspage)+1}_{str(auth)}_{user}"
                             ),
@@ -716,7 +740,10 @@ async def remove_down_path_files():
     except Exception as e:
         # Log and continue; do not crash scheduler
         from Emilia import LOGGER
-        LOGGER.warning(f"remove_down_path_files: failed to clean downloads dir {DOWN_PATH}: {e}")
+
+        LOGGER.warning(
+            f"remove_down_path_files: failed to clean downloads dir {DOWN_PATH}: {e}"
+        )
         return
 
 

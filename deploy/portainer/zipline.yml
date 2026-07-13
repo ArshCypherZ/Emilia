@@ -1,0 +1,131 @@
+version: "3.9"
+
+services:
+  postgresql:
+    image: postgres:16
+    container_name: zipline_postgresql
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zipline
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:?POSTGRESQL_PASSWORD is required}
+      POSTGRES_DB: zipline
+    command: ["postgres", "-p", "55432"]
+    volumes:
+      - zipline_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zipline", "-p", "55432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipline:
+    image: ghcr.io/diced/zipline:latest
+    container_name: zipline
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://zipline:${POSTGRESQL_PASSWORD}@127.0.0.1:55432/zipline
+      CORE_SECRET: ${CORE_SECRET:?CORE_SECRET is required}
+      CORE_HOSTNAME: 127.0.0.1
+      CORE_PORT: 8191
+      CORE_TRUST_PROXY: "true"
+      CORE_RETURN_HTTPS_URLS: "true"
+      CORE_DEFAULT_DOMAIN: files.arshjaved.in
+      INVITES_ENABLED: "false"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - zipline_uploads:/zipline/uploads
+      - zipline_public:/zipline/public
+      - zipline_themes:/zipline/themes
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8191/api/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  zipline_bootstrap:
+    image: python:3.12-slim
+    container_name: zipline_bootstrap
+    network_mode: host
+    restart: on-failure
+    depends_on:
+      zipline:
+        condition: service_healthy
+    environment:
+      ZIPLINE_INTERNAL_URL: http://127.0.0.1:8191
+      ZIPLINE_ADMIN_USERNAME: emilia
+      ZIPLINE_ADMIN_PASSWORD: ${ZIPLINE_ADMIN_PASSWORD:?ZIPLINE_ADMIN_PASSWORD is required}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        python - <<'PY'
+        import json
+        import os
+        import sys
+        import time
+        import urllib.error
+        import urllib.request
+
+        base = os.environ["ZIPLINE_INTERNAL_URL"].rstrip("/")
+        username = os.environ["ZIPLINE_ADMIN_USERNAME"]
+        password = os.environ["ZIPLINE_ADMIN_PASSWORD"]
+
+        def request_json(method, url, payload=None):
+            data = None
+            headers = {}
+            if payload is not None:
+                data = json.dumps(payload).encode("utf-8")
+                headers["Content-Type"] = "application/json"
+            req = urllib.request.Request(url, data=data, headers=headers, method=method)
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    body = resp.read().decode("utf-8")
+                    try:
+                        return resp.status, json.loads(body or "{}")
+                    except json.JSONDecodeError:
+                        return resp.status, {"raw": body}
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="ignore")
+                try:
+                    payload = json.loads(body or "{}")
+                except json.JSONDecodeError:
+                    payload = {"raw": body}
+                return exc.code, payload
+
+        for _ in range(60):
+            status, _ = request_json("GET", f"{base}/api/healthcheck")
+            if status == 200:
+                break
+            time.sleep(2)
+        else:
+            print("Zipline did not become healthy in time.", file=sys.stderr, flush=True)
+            raise SystemExit(1)
+
+        status, payload = request_json("GET", f"{base}/api/setup")
+        if status == 200 and payload.get("firstSetup"):
+            status, payload = request_json(
+                "POST",
+                f"{base}/api/setup",
+                {"username": username, "password": password},
+            )
+            if status != 200:
+                print(f"Zipline setup failed: {payload}", file=sys.stderr, flush=True)
+                raise SystemExit(1)
+
+        print("Zipline bootstrap finished.", flush=True)
+        PY
+
+networks:
+  default:
+    external: true
+    name: host
+
+volumes:
+  zipline_pgdata:
+  zipline_uploads:
+  zipline_public:
+  zipline_themes:

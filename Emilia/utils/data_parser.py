@@ -2,11 +2,11 @@ import os
 import time
 from datetime import datetime
 
-from Emilia.utils.async_http import post, get
 from bs4 import BeautifulSoup
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import BOT_USERNAME
+from Emilia.utils.async_http import get
 from Emilia.utils.db import get_collection
 from Emilia.utils.google_trans_new import google_translator
 from Emilia.utils.helper import (

@@ -1,6 +1,6 @@
 # Centralized collection names, key fields, and filter helpers
 from types import SimpleNamespace
-from typing import Dict, Any
+from typing import Any, Dict
 
 COLL = SimpleNamespace(
     admincache="admincache",

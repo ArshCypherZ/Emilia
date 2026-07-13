@@ -5,7 +5,7 @@ from Emilia import db
 connection = db.connection
 chats = db.chats
 
-first_found_date = datetime.datetime.now()
+first_found_date = datetime.datetime.now(datetime.timezone.utc)
 
 
 async def connectDB(user_id, chat_id):
@@ -17,7 +17,9 @@ async def connectDB(user_id, chat_id):
 
 
 async def GetConnectedChat(user_id):
-    doc = await connection.find_one({"user_id": user_id}, {"_id": 0, "connected_chat": 1})
+    doc = await connection.find_one(
+        {"user_id": user_id}, {"_id": 0, "connected_chat": 1}
+    )
     return doc.get("connected_chat") if doc else None
 
 
@@ -27,11 +29,15 @@ async def isChatConnected(user_id) -> bool:
 
 
 async def disconnectChat(user_id):
-    await connection.update_one({"user_id": user_id}, {"$set": {"connection": False}}, upsert=True)
+    await connection.update_one(
+        {"user_id": user_id}, {"$set": {"connection": False}}, upsert=True
+    )
 
 
 async def reconnectChat(user_id):
-    await connection.update_one({"user_id": user_id}, {"$set": {"connection": True}}, upsert=True)
+    await connection.update_one(
+        {"user_id": user_id}, {"$set": {"connection": True}}, upsert=True
+    )
 
 
 async def allow_collection(chat_id, chat_title, allow_collection):

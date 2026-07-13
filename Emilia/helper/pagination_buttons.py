@@ -1,7 +1,6 @@
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia.data import HIDDEN_MOD
-from Emilia import LOGGER
 
 
 class EqInlineKeyboardButton(InlineKeyboardButton):
@@ -41,18 +40,35 @@ def paginate_modules(_page_n, module_dict, prefix, chat=None):
             ]
         )
 
-    pairs = []
-    pair = []
+    visible = [m for m in modules if HIDDEN_MOD.get(m.text.lower()) is None]
 
-    for module in modules:
-        if HIDDEN_MOD.get(module.text.lower()) is None:
-            pair.append(module)
-            if len(pair) == 3:
-                pairs.append(pair)
-                pair = []
+    # Chunk to at most 3 columns x 8 rows per page and add a pager row.
+    COLS, ROWS = 3, 8
+    per_page = COLS * ROWS
+    total_pages = max(1, (len(visible) + per_page - 1) // per_page)
+    page_n = max(0, min(int(_page_n), total_pages - 1))
 
-    if pair:
-        pairs.append(pair)
+    start = page_n * per_page
+    page_items = visible[start : start + per_page]
+
+    pairs = [page_items[i : i + COLS] for i in range(0, len(page_items), COLS)]
+
+    if total_pages > 1:
+        prev_p = (page_n - 1) % total_pages
+        next_p = (page_n + 1) % total_pages
+        pairs.append(
+            [
+                EqInlineKeyboardButton(
+                    "《", callback_data="{}_page({})".format(prefix, prev_p)
+                ),
+                EqInlineKeyboardButton(
+                    "Back", callback_data="{}_start".format(prefix)
+                ),
+                EqInlineKeyboardButton(
+                    "》", callback_data="{}_page({})".format(prefix, next_p)
+                ),
+            ]
+        )
 
     return InlineKeyboardMarkup(pairs)
 

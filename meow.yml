@@ -5,6 +5,12 @@ services:
     image: redis:alpine
     container_name: emilia_redis
     network_mode: host
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --bind 127.0.0.1 -::1
+      --protected-mode yes
+      --replica-read-only yes
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -14,9 +20,20 @@ services:
     image: emilia:${TAG}
     container_name: emilia
     network_mode: host # or bridge or whatever your network is
+    environment:
+      EMILIA_ZIPLINE_URL: ${EMILIA_ZIPLINE_URL:-http://127.0.0.1:8191}
+      EMILIA_ZIPLINE_USERNAME: ${EMILIA_ZIPLINE_USERNAME:-emilia}
+      EMILIA_ZIPLINE_PASSWORD: ${EMILIA_ZIPLINE_PASSWORD:?EMILIA_ZIPLINE_PASSWORD is required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     depends_on:
       - redis
     pull_policy: never
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import os,sys,time; p='/tmp/emilia_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<600 else 1)\""]
+      interval: 60s
+      timeout: 5s
+      retries: 3
   restarter:
     image: docker:cli
     volumes: ["/var/run/docker.sock:/var/run/docker.sock"]

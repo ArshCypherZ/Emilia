@@ -3,53 +3,23 @@ __mod_name__ = "SFW"
 __help__ = """
 This module is safe for work (for real!)
 
-**Commands**:
+**Images**:
 
-• /neko: Sends Random SFW Neko source Images.
-• /ngif: Sends Random Neko GIFs.
-• /tickle: Sends Random Tickle GIFs.
-• /feed: Sends Random Feeding GIFs.
-• /gasm: Sends Random Orgasm Stickers.
-• /avatar: Sends Random Avatar Stickers.
-• /waifu: Sends Random Waifu Stickers.
-• /kiss: Sends Random Kissing GIFs.
-• /cuddle: Sends Random Cuddle GIFs.
-• /foxgirl: Sends Random FoxGirl source Images.
-• /smug: Sends Random Smug GIFs.
-• /gecg: IDK
-• /slap: Sends Random Slap GIFs.
+• /waifu: Sends Random Waifu Images.
+• /neko: Sends Random Neko Images.
+• /husbando: Sends Random Husbando Images.
+• /kitsune: Sends Random Kitsune Images.
 
-**Some more SFW commands**:
+**Action GIFs**:
 
-• /shinobu
-• /hug
-• /megumin
-• /bully
-• /cry
-• /awoo
-• /woof
-• /lick
-• /pat
-• /bonk
-• /yeet
-• /blush
-• /smile
-• /wave
-• /highfive
-• /handhold
-• /nom
-• /bite
-• /glomp
-• /slapgif
-• /kill
-• /kicks
-• /happy
-• /wink
-• /poke
-• /dance
-• /cringe
-• /wallpaper
-• /goose
+• /hug • /kiss • /pat • /cuddle • /cry • /poke • /slap • /kicks • /happy
+• /wink • /dance • /bite • /feed • /nom • /handhold • /highfive • /bonk
+• /yeet • /blush • /smile • /wave • /smug • /tickle • /glomp • /kill
+• /bully • /awoo • /lick • /lurk • /shoot • /sleep • /clap • /shrug
+• /stare • /confused • /sip • /think • /wag • /teehee • /shocked • /bleh
+• /bored • /yawn • /facepalm • /kabedon • /baka • /angry • /spin • /shake
+• /run • /nod • /nope • /punch • /handshake • /lappillow • /pout
+• /blowkiss • /salute • /thumbsup • /laugh • /tableflip • /ngif • /cringe
 
 Please report to our support chat if some command is not working :)
 """

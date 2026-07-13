@@ -6,7 +6,10 @@ rules = db.rules
 async def set_rules_db(chat_id, chat_rules):
     await rules.update_one(
         {"chat_id": chat_id},
-        {"$set": {"rules": chat_rules}, "$setOnInsert": {"private_note": True, "button_text": "Rules"}},
+        {
+            "$set": {"rules": chat_rules},
+            "$setOnInsert": {"private_note": True, "button_text": "Rules"},
+        },
         upsert=True,
     )
 
@@ -19,7 +22,10 @@ async def get_rules(chat_id: int):
 async def set_private_rule(chat_id, private_note):
     await rules.update_one(
         {"chat_id": chat_id},
-        {"$set": {"private_note": private_note}, "$setOnInsert": {"rules": None, "button_text": "Rules"}},
+        {
+            "$set": {"private_note": private_note},
+            "$setOnInsert": {"rules": None, "button_text": "Rules"},
+        },
         upsert=True,
     )
 
@@ -32,7 +38,10 @@ async def get_private_note(chat_id) -> bool:
 async def set_rule_button(chat_id, rule_button):
     await rules.update_one(
         {"chat_id": chat_id},
-        {"$set": {"button_text": rule_button}, "$setOnInsert": {"rules": None, "private_note": None}},
+        {
+            "$set": {"button_text": rule_button},
+            "$setOnInsert": {"rules": None, "private_note": None},
+        },
         upsert=True,
     )
 
