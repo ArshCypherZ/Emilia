@@ -5,7 +5,11 @@ import traceback
 from os.path import dirname
 from sys import platform
 
-import uvloop
+try:
+    import uvloop
+    has_uvloop = True
+except ImportError:
+    has_uvloop = False
 from pyrogram import idle
 
 from Emilia import LOGGER, create_indexes, pgram
@@ -328,7 +332,10 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        uvloop.run(main())
+        if has_uvloop:
+            uvloop.run(main())
+        else:
+            asyncio.run(main())
     except KeyboardInterrupt:
         LOGGER.info("Bot stopped via KeyboardInterrupt.")
     finally:

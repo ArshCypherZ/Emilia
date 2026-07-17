@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 
 from pyrogram import Client, enums
+from pyrogram.types import LinkPreviewOptions
 
 from Emilia import BOT_USERNAME, LOGGER, custom_filter
 from Emilia.helper.disable import disable

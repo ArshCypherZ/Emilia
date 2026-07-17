@@ -200,6 +200,7 @@ async def get_telegram_info(client, event):
 
 
 def log_to_channel(func):
+    @wraps(func)
     async def wrapper(*args, **kwargs):
         log_message = " "
         client = args[0]
@@ -417,6 +418,7 @@ def rate_limit(limit_config=RATE_LIMIT_GENERAL):
     messages_per_window, window_seconds = limit_config
 
     def decorator(func):
+        @wraps(func)
         async def wrapper(*args, **kwargs):
             target = args[1] if args[1] is not None else args[0]
             user = getattr(target, "from_user", None)

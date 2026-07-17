@@ -58,14 +58,29 @@ async def cba(client, message):
         adjust_width=True,
         theme=random.choice(["seti", "Night Owl", "One Dark"]),
     )
+    import uuid
+    unique_id = uuid.uuid4().hex
+    base_name = f"carbon_{unique_id}"
+    full_name = f"{base_name}.png"
+
     cb = carbon.Carbon()
     try:
         img = await cb.generate(options)
+        await img.save(base_name)
+        await message.reply_photo(full_name, reply_parameters=None)
     except Exception as e:
         LOGGER.error(e)
         await message.reply_text(
             f"Some error occured! Please report to @{SUPPORT_CHAT}"
         )
-    await img.save("carbon")
-    await message.reply_photo("carbon.png", reply_parameters=None)
-    await res.delete()
+    finally:
+        try:
+            await res.delete()
+        except Exception:
+            pass
+        if os.path.exists(full_name):
+            try:
+                os.remove(full_name)
+            except Exception:
+                pass
+

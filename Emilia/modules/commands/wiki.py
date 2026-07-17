@@ -54,13 +54,23 @@ async def wiki(client, message):
         result = "An error occurred while processing your request."
 
     if len(result) > 4000:
-        with open("result.txt", "w") as f:
-            f.write(f"{result}\n\nUwU OwO OmO UmU")
-        await client.send_document(
-            message.chat.id,
-            "result.txt",
-            file_name="result.txt",
-        )
+        import os
+        import uuid
+        filename = f"wiki_{uuid.uuid4().hex}.txt"
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(f"{result}\n\nUwU OwO OmO UmU")
+            await client.send_document(
+                message.chat.id,
+                filename,
+                file_name="wiki_result.txt",
+            )
+        finally:
+            if os.path.exists(filename):
+                try:
+                    os.remove(filename)
+                except Exception:
+                    pass
     else:
         await message.reply_text(
             result, parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True)

@@ -9,5 +9,7 @@ Basically, there is chatbot inserted in {BOT_NAME}, it can be used to talk in a 
 
 **Commands**:
 
-• /chatbot: Shows chatbot control panel
+• /chatbot [enable|disable]: Enable or disable chatbot in the group.
+• /chat `<message>`: Directly converse with the chatbot.
+• /reset: Reset your conversation history.
 """

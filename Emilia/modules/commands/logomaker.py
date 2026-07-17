@@ -289,12 +289,26 @@ async def lego(client, message):
 
     pesan = await message.reply_text("Logo In A Process. Please Wait.")
 
-    randc = random.choice(LOGO_LINKS)
-    response = await get(randc)
-    fname = "Emilia.png"
-    await asyncio.to_thread(_render_logo, response.content, text, fname)
-    await client.send_photo(message.chat.id, fname)
-    await pesan.delete()
+    import uuid
+    unique_id = uuid.uuid4().hex
+    fname = f"logo_{unique_id}.png"
 
-    if os.path.exists(fname):
-        os.remove(fname)
+    try:
+        randc = random.choice(LOGO_LINKS)
+        response = await get(randc)
+        await asyncio.to_thread(_render_logo, response.content, text, fname)
+        await client.send_photo(message.chat.id, fname)
+    except Exception as e:
+        LOGGER.error(f"Error in logo maker: {e}")
+        await message.reply_text("Something went wrong while generating the logo.")
+    finally:
+        try:
+            await pesan.delete()
+        except Exception:
+            pass
+        if os.path.exists(fname):
+            try:
+                os.remove(fname)
+            except Exception:
+                pass
+

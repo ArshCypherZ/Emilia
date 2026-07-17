@@ -19,4 +19,6 @@ An "odds and ends" module for small, simple commands which don't really fit anyw
 • /unzip: reply to a telegram file to decompress it from the .zip format
 
 • /count: Count total messages of a chat
+
+• /weather `<city>`: Get current weather conditions for a city.
 """
