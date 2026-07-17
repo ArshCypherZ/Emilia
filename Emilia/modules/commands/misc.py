@@ -16,8 +16,8 @@ from Emilia.utils.async_http import get
 from Emilia.utils.decorators import *
 
 
-def _synthesize_tts(text, lang):
-    gTTS(text, tld="com", lang=lang).save("stt.mp3")
+def _synthesize_tts(text, lang, filename):
+    gTTS(text, tld="com", lang=lang).save(filename)
 
 
 @register(pattern="(count|gstat)")
@@ -50,22 +50,29 @@ async def tts(client, message):
             lang = "en"
     else:
         return await usage_string(message, tts)
+    import uuid
+    filename = f"stt_{uuid.uuid4().hex}.mp3"
     try:
-        await asyncio.to_thread(_synthesize_tts, text, lang)
+        await asyncio.to_thread(_synthesize_tts, text, lang, filename)
+        aud_len = int((MP3(filename)).info.length)
+        if aud_len == 0:
+            aud_len = 1
+        await client.send_chat_action(message.chat.id, ChatAction.RECORD_AUDIO)
+        await message.reply_audio(
+            filename,
+            reply_parameters=None,
+            duration=aud_len,
+            title=f"stt_{lang}",
+            performer=f"{BOT_NAME}",
+        )
     except BaseException as e:
         return await message.reply_text(str(e))
-    aud_len = int((MP3("stt.mp3")).info.length)
-    if aud_len == 0:
-        aud_len = 1
-    await client.send_chat_action(message.chat.id, ChatAction.RECORD_AUDIO)
-    await message.reply_audio(
-        "stt.mp3",
-        reply_parameters=None,
-        duration=aud_len,
-        title=f"stt_{lang}",
-        performer=f"{BOT_NAME}",
-    )
-    os.remove("stt.mp3")
+    finally:
+        if os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except Exception:
+                pass
 
 
 # DONE: GIFs

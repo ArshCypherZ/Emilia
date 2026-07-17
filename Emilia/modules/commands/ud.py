@@ -1,3 +1,4 @@
+import urllib.parse
 from pyrogram.errors import ChatWriteForbidden
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -19,13 +20,16 @@ async def get_ud_definition(text):
 @register(pattern="ud", disable=True)
 @disable
 async def ud_command(client, message):
-    words = (message.text or "").split(" ")
-
-    if len(words) != 2:
-        await message.reply_text("Please provide only one word.")
+    try:
+        text = message.text.split(None, 1)[1].strip()
+    except IndexError:
+        await message.reply_text("Please provide a search term (word or phrase).")
         return
 
-    text = words[1]
+    if not text:
+        await message.reply_text("Please provide a search term (word or phrase).")
+        return
+
     result = await get_ud_definition(text)
 
     if result:
@@ -40,7 +44,7 @@ async def ud_command(client, message):
     else:
         reply_text = "No results found."
 
-    search_url = f"https://www.google.com/search?q={text}"
+    search_url = f"https://www.google.com/search?q={urllib.parse.quote(text)}"
     buttons = InlineKeyboardMarkup(
         [[InlineKeyboardButton("🔎 Google it!", url=search_url)]]
     )
@@ -54,12 +58,15 @@ async def ud_command(client, message):
 @register(pattern="define", disable=True)
 @disable
 async def define_command(client, message):
-    user_input = (message.text or "").split(None, 1)[1]
+    try:
+        user_input = message.text.split(None, 1)[1].strip()
+    except IndexError:
+        return await message.reply_text("Please provide a word to define!")
 
     if not user_input:
         return await message.reply_text("Please provide a word to define!")
 
-    url = "https://api.dictionaryapi.dev/api/v2/entries/en/{}".format(user_input)
+    url = "https://api.dictionaryapi.dev/api/v2/entries/en/{}".format(urllib.parse.quote(user_input))
     response = await get(url)
 
     try:
@@ -77,3 +84,4 @@ async def define_command(client, message):
         pass
 
     await message.reply_text("__No results found.__")
+

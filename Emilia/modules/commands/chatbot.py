@@ -15,6 +15,7 @@ from Emilia import BOT_ID, CARTESIA_API_KEY, GROQ_API_KEY, LOGGER, db
 from Emilia.custom_filter import listen, register
 from Emilia.helper.admins import is_admin
 from Emilia.utils.async_http import post as async_post
+from Emilia.utils.decorators import rate_limit, RATE_LIMIT_GENERAL
 
 # ─── Configuration ──────────────────────────────────────────────────────
 
@@ -49,6 +50,9 @@ if not voice_enabled:
 
 chatbotdb = db.chatbotto
 convodb = db.gemini_convos
+
+from Emilia.utils.cache import SimpleCache
+chatbot_cache = SimpleCache(default_ttl=600, namespace="chatbot_enabled")
 
 
 # ─── Tool Definition ────────────────────────────────────────────────────
@@ -492,12 +496,52 @@ async def chatbotcheck(client, message):
             {"$set": {"chat_id": message.chat.id}},
             upsert=True,
         )
+        await chatbot_cache.set(f"enabled:{message.chat.id}", True)
         await message.reply_text("Chatbot enabled.")
     elif cmd in ("disable", "off", "no"):
         await chatbotdb.delete_one({"chat_id": message.chat.id})
+        await chatbot_cache.set(f"enabled:{message.chat.id}", False)
         await message.reply_text("Chatbot disabled.")
     else:
         await message.reply_text("Invalid argument. Use enable or disable.")
+
+
+@register(pattern="chat")
+@rate_limit(RATE_LIMIT_GENERAL)
+async def chat_cmd(client, message):
+    try:
+        query = message.text.split(None, 1)[1].strip()
+    except IndexError:
+        await message.reply_text("Usage: /chat [message]")
+        return
+
+    if not query:
+        await message.reply_text("Usage: /chat [message]")
+        return
+
+    await client.send_chat_action(message.chat.id, ChatAction.TYPING)
+    response = await handleChatRequest(message, query)
+
+    if not response:
+        await message.reply_text(random.choice(RANDOM_RESPONSES))
+        return
+
+    # Voice response
+    if response.type == "voice" and response.voice_text:
+        ogg_path = None
+        try:
+            await client.send_chat_action(message.chat.id, ChatAction.RECORD_AUDIO)
+            ogg_path = await generate_voice_note(response.voice_text)
+            if ogg_path:
+                await message.reply_voice(ogg_path)
+            else:
+                await sendResponse(message, response.voice_text)
+        finally:
+            _safe_remove(ogg_path)
+        return
+
+    # Text response
+    await sendResponse(message, response.text or "")
 
 
 @register(pattern="reset")
@@ -532,7 +576,14 @@ async def message_handler(client, message):
     if not message.reply_to_message_id:
         return
 
-    if not await chatbotdb.find_one({"chat_id": message.chat.id}):
+    chat_id = message.chat.id
+    cache_key = f"enabled:{chat_id}"
+    enabled = await chatbot_cache.get(cache_key)
+    if enabled is None:
+        doc = await chatbotdb.find_one({"chat_id": chat_id})
+        enabled = bool(doc)
+        await chatbot_cache.set(cache_key, enabled)
+    if not enabled:
         return
 
     reply = message.reply_to_message

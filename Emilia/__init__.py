@@ -8,7 +8,6 @@ from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 
 import orjson
 import redis.asyncio as redis
-import uvloop
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from motor import motor_asyncio
 from pymongo.errors import DuplicateKeyError
@@ -18,10 +17,12 @@ from Emilia.config import Development as Config
 from Emilia.utils.ads import install_ad_hooks
 from Emilia.utils.trace import TRACE_ID
 
-# Must run before any event loop is created (clients, schedulers, motor).
-# Sole entry point for the whole process tree — every client/scheduler
-# inherits uvloop.
-uvloop.install()
+# Try to install uvloop for performance on supported platforms
+try:
+    import uvloop
+    uvloop.install()
+except ImportError:
+    pass
 
 
 # trace.py has no Emilia deps; import at module top so JSONFormatter never does a
