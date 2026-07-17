@@ -52,10 +52,7 @@ async def ud_command(client, message):
     try:
         await message.reply_text(reply_text, reply_markup=buttons)
     except ChatWriteForbidden:
-        try:
-            await message.reply_text(reply_text)
-        except Exception:
-            pass
+        await message.reply_text(reply_text)
 
 
 @register(pattern="define", disable=True)
