@@ -1,69 +1,120 @@
 from pyrogram import Client, filters
-from pyrogram.enums import MessageEntityType
+from pyrogram.enums import ChatType, MessageEntityType
+from pyrogram.errors import MessageDeleteForbidden, RPCError
 
-from Emilia import custom_filter, db
+from Emilia import custom_filter
 from Emilia.helper.chat_status import check_user
-from Emilia.utils.decorators import *
+from Emilia.mongo.cleaner_mongo import get_cleancommand_cached, set_cleancommand
+from Emilia.mongo.connection_mongo import GetConnectedChat
+from Emilia.utils.decorators import (
+    description,
+    example,
+    exception,
+    log_to_channel,
+    rate_limit,
+    usage,
+    usage_string,
+)
 
-# db
-cleanerdb = db.cleaner
 
-
-async def cleanblue_on(chat_id: int):
-    return await cleanerdb.update_one(
-        {"chat_id": chat_id}, {"$set": {"chat_id": chat_id}}, upsert=True
+@usage("/cleancommand [on/off]")
+@example("/cleancommand on")
+@description("This will delete incoming bot commands from the chat to prevent spam.")
+@Client.on_message(
+    custom_filter.command(
+        commands=[
+            "cleancommand",
+            "cleancommands",
+            "cleancmd",
+            "cleanblue",
+            "nocleancommand",
+            "keepcommand",
+        ]
     )
-
-
-async def cleanblue_off(chat_id: int):
-    return await cleanerdb.delete_one({"chat_id": chat_id})
-
-
-async def isOn(chat_id: int) -> bool:
-    return bool(await cleanerdb.find_one({"chat_id": chat_id}))
-
-
-@usage("/cleanblue [on/off]")
-@example("/cleanblue on")
-@description("This will delete incoming blue texts from the chat (i.e, bot commands)")
-@Client.on_message(custom_filter.command(commands="cleanblue") & filters.group)
+)
+@rate_limit()
+@exception
 @log_to_channel
-async def _cleanblue(_, message):
-    if not await check_user(message, privileges="can_delete_messages"):
-        return
-    args = message.text.split()
+async def _cleancommand(_, message):
     chat_id = message.chat.id
-    check = await isOn(chat_id)
-    if "on" in args:
+    if message.chat.type == ChatType.PRIVATE:
+        user_id = message.from_user.id if message.from_user else None
+        connected = await GetConnectedChat(user_id) if user_id else None
+        if connected:
+            chat_id = connected
+            if not await check_user(
+                message, privileges="can_delete_messages", pm_mode=True, chat_id=chat_id
+            ):
+                return
+    else:
+        if not await check_user(message, privileges="can_delete_messages"):
+            return
+
+    cmd = message.text.split()[0].lower()
+    if "@" in cmd:
+        cmd = cmd.split("@")[0]
+    if cmd.startswith(("/", "!", ".")):
+        cmd = cmd[1:]
+
+    args = [x.lower() for x in message.text.split()[1:]]
+    check = await get_cleancommand_cached(chat_id)
+
+    if cmd in ("nocleancommand", "keepcommand"):
         if not check:
-            await cleanblue_on(chat_id)
-            await message.reply_text("Bluetext cleaning enabled!")
-            return "ENABLED_BLUETEXT_CLEANING", None, None
-        return await message.reply_text(
-            "Bluetext cleaning has been already enabled in this chat!"
+            await message.reply_text(
+                "Command cleaning has been already disabled in this chat!"
+            )
+            return
+        await set_cleancommand(chat_id, False)
+        await message.reply_text("Disabled command cleaning successfully!")
+        return "DISABLED_COMMAND_CLEANING", None, None
+
+    if not args:
+        status_text = "enabled" if check else "disabled"
+        await message.reply_text(
+            f"Command cleaning is currently **{status_text}** in this chat."
         )
-    elif "off" in args:
+        return
+
+    first_arg = args[0]
+    if first_arg in ("on", "yes", "true", "enable"):
+        if not check:
+            await set_cleancommand(chat_id, True)
+            await message.reply_text("Command cleaning enabled!")
+            return "ENABLED_COMMAND_CLEANING", None, None
+        return await message.reply_text(
+            "Command cleaning has been already enabled in this chat!"
+        )
+    elif first_arg in ("off", "no", "false", "disable"):
         if not check:
             return await message.reply_text(
-                "Bluetext cleaning has been already disabled in this chat!"
+                "Command cleaning has been already disabled in this chat!"
             )
-        await cleanblue_off(chat_id)
-        await message.reply_text("Disabled Bluetext cleaning successfully!")
-        return "DISABLED_BLUETEXT_CLEANING", None, None
+        await set_cleancommand(chat_id, False)
+        await message.reply_text("Disabled command cleaning successfully!")
+        return "DISABLED_COMMAND_CLEANING", None, None
     else:
-        await usage_string(message, _cleanblue)
+        await usage_string(message, _cleancommand)
         return
 
 
-@Client.on_message(filters.group, group=16)
+@Client.on_message(filters.group | filters.private, group=16)
 async def _delmessage(_, message):
+    if not message.chat:
+        return
     chat_id = message.chat.id
-    check = await isOn(chat_id)
-    if not check:
+    if not await get_cleancommand_cached(chat_id):
+        return
+    entities = message.entities or message.caption_entities
+    if not entities:
         return
     try:
-        type = message.entities[0].type
-        if type == MessageEntityType.BOT_COMMAND:
+        first_entity = entities[0]
+        if first_entity.offset == 0 and first_entity.type == MessageEntityType.BOT_COMMAND:
             await message.delete()
-    except BaseException:
+    except MessageDeleteForbidden:
+        pass
+    except RPCError:
+        pass
+    except Exception:
         pass

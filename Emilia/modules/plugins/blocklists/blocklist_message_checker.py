@@ -37,7 +37,12 @@ def _get_compiled_patterns(chat_id: int, items):
         return cached[1]
 
     compiled = [
-        (word, re.compile(r"(?<!\w)" + re.escape(_normalize(word)) + r"(?!\w)", re.IGNORECASE))
+        (
+            word,
+            re.compile(
+                r"(?<!\w)" + re.escape(_normalize(word)) + r"(?!\w)", re.IGNORECASE
+            ),
+        )
         for word in plain_items
     ]
     _compiled_pattern_cache[chat_id] = (cache_key, compiled)

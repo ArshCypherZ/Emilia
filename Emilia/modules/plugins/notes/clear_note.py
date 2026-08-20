@@ -1,7 +1,7 @@
 import html
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import custom_filter
@@ -68,11 +68,14 @@ async def ClearAll_Note(client, message):
             InlineKeyboardButton(
                 text="Delete all notes",
                 callback_data=f"clearallnotes_clear_{owner_id}_{chat_id}",
+                style=ButtonStyle.DANGER,
             )
         ],
         [
             InlineKeyboardButton(
-                text="Cancel", callback_data=f"clearallnotes_cancel_{owner_id}"
+                text="Cancel",
+                callback_data=f"clearallnotes_cancel_{owner_id}",
+                style=ButtonStyle.DANGER,
             )
         ],
     )
@@ -80,7 +83,7 @@ async def ClearAll_Note(client, message):
     await message.reply(
         f"Are you sure you want to clear **ALL** notes in {chat_title}? This action is irreversible.",
         reply_markup=keyboard,
-        )
+    )
 
 
 @Client.on_callback_query(

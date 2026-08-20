@@ -8,7 +8,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
     InlineQueryResultCachedSticker,
 )
-from webcolors import hex_to_name, name_to_hex
+
 
 import Emilia.strings as strings
 from Emilia import db
@@ -74,6 +74,11 @@ def _rate_buttons(cd):
     )
 
 
+import re
+
+from webcolors import name_to_hex
+
+
 @command(pattern="q")
 async def _quotly_api_(client, e):
     if not e.reply_to_message_id:
@@ -83,23 +88,31 @@ async def _quotly_api_(client, e):
         d = e.text.split(maxsplit=1)[1]
     except IndexError:
         d = ""
-    color = None
-    for y in d.split():
-        try:
-            color, g = name_to_hex(y), "hex"
-        except ValueError:
-            try:
-                color, g = hex_to_name(y), "name"
-            except ValueError:
-                continue
-    if color:
-        d = d.replace(hex_to_name(color) if g == "hex" else color, "")
+
+    color = "#1b1429"
+    # Find Hex Colors
+    hex_match = re.search(r"#(?:[0-9a-fA-F]{3}){1,2}\b", d)
+    if hex_match:
+        color = hex_match.group(0)
+        d = d.replace(color, "")
     else:
-        color = "#1b1429"
-    photo = True if "p" in d else False
+        # Find Named Colors
+        for word in d.split():
+            try:
+                color = name_to_hex(word.lower())
+                d = d.replace(word, "")
+                break
+            except ValueError:
+                pass
+
+    photo = True if "p" in d.split() else False
     messages = []
-    num = [int(x) for x in d.split() if x.isdigit()]
-    num = num[0] if num else None
+
+    num_match = re.search(r"\b\d+\b", d)
+    num = int(num_match.group(0)) if num_match else None
+    if num:
+        num = min(num, 25)  # Clamp to prevent API abuse
+
     msgs = (
         [
             i
@@ -158,11 +171,10 @@ async def _quotly_api_(client, e):
                     if reply.sender_chat:
                         _r = {
                             "chatId": e.chat.id,
-                            # "first_name": reply.chat.title,
-                            # "last_name": "",
                             "username": reply.chat.username,
-                            "text": reply.text,
+                            "text": reply.text or reply.caption or "",
                             "name": reply.chat.title,
+                            "entities": get_entites(reply),
                         }
                     elif reply.from_user:
                         name = reply.from_user.first_name
@@ -178,11 +190,10 @@ async def _quotly_api_(client, e):
                             _name = fwd_name
                         _r = {
                             "chatId": e.chat.id,
-                            # "first_name": reply.from_user.first_name,
-                            # "last_name": reply.from_user.last_name,
                             "username": reply.from_user.username,
-                            "text": reply.text,
+                            "text": reply.text or reply.caption or "",
                             "name": name,
+                            "entities": get_entites(reply),
                         }
                     else:
                         _r = {}
@@ -212,43 +223,45 @@ async def _quotly_api_(client, e):
                 ]
             else:
                 media = None
+            voice = None
+            if _x.voice:
+                mediaType = "voice"
+                voice = {
+                    "waveform": list(_x.voice.waveform) if _x.voice.waveform else []
+                }
             avatar = True
             if c[-1] == _id:
                 avatar = False
             c.append(_id)
-            if not media:
-                messages.append(
-                    {
-                        "entities": get_entites(_x),
-                        "chatId": e.chat.id,
-                        "avatar": avatar,
-                        "from": _from,
-                        "text": _text,
-                        "replyMessage": _r,
-                    }
-                )
-            elif media:
-                messages.append(
-                    {
-                        "chatId": e.chat.id,
-                        "avatar": avatar,
-                        "media": media,
-                        "mediaType": mediaType,
-                        "from": _from,
-                        "replyMessage": {},
-                    }
-                )
+            msg_payload = {
+                "chatId": e.chat.id,
+                "avatar": avatar,
+                "from": _from,
+                "replyMessage": _r,
+            }
+            if media:
+                msg_payload["media"] = media
+                msg_payload["mediaType"] = mediaType
+            if voice:
+                msg_payload["voice"] = voice
+                msg_payload["mediaType"] = mediaType
+            if not media and not voice:
+                msg_payload["entities"] = get_entites(_x)
+                msg_payload["text"] = _text
+            messages.append(msg_payload)
     post_data = {
         "type": "quote",
         "backgroundColor": color,
         "width": 512,
         "height": 768,
-        "scale": 2,
+        "scale": 3,
         "messages": messages,
+        "botToken": client.bot_token,
     }
     req = await post(
-        "https://quoteapi-aqac.onrender.com/generate",
+        "http://127.0.0.1:8432/generate",
         json=post_data,
+        timeout=60,
     )
     if await get_qrate(e.chat.id):
         cd = str(e.id) + "|" + str(0) + "|" + str(0)
@@ -257,7 +270,11 @@ async def _quotly_api_(client, e):
     else:
         buttons = None
     try:
-        fq = req.json()["result"]["image"]
+        json_resp = req.json()
+        if "result" in json_resp:
+            fq = json_resp["result"]["image"]
+        else:
+            fq = json_resp["image"]
         buffer = base64.b64decode(fq.encode("utf-8"))
         from Emilia.utils.executors import run_in_thread
 
@@ -271,9 +288,13 @@ async def _quotly_api_(client, e):
             await run_in_thread(write_file_sync, "gay.webp", buffer)
 
         if photo:
-            qs = await e.reply_document("gay.png", reply_parameters=None, reply_markup=buttons)
+            qs = await e.reply_document(
+                "gay.png", reply_parameters=None, reply_markup=buttons
+            )
         else:
-            qs = await e.reply_sticker("gay.webp", reply_parameters=None, reply_markup=buttons)
+            qs = await e.reply_sticker(
+                "gay.webp", reply_parameters=None, reply_markup=buttons
+            )
         await add_quote(
             e.chat.id,
             qs.sticker.file_id if qs.sticker else qs.document.file_id,
@@ -292,6 +313,7 @@ ENTITY_MAP = {
     MessageEntityType.PHONE_NUMBER: "phone_number",
     MessageEntityType.UNDERLINE: "underline",
     MessageEntityType.MENTION: "mention",
+    MessageEntityType.CUSTOM_EMOJI: "custom_emoji",
 }
 
 
@@ -301,7 +323,10 @@ def get_entites(x):
         type = ENTITY_MAP.get(y.type)
         if type is None:
             continue
-        q.append({"type": type, "offset": y.offset, "length": y.length})
+        entity_obj = {"type": type, "offset": y.offset, "length": y.length}
+        if type == "custom_emoji" and y.custom_emoji_id:
+            entity_obj["custom_emoji_id"] = str(y.custom_emoji_id)
+        q.append(entity_obj)
     return q
 
 

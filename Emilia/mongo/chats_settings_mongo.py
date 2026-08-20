@@ -1,5 +1,5 @@
 from Emilia import db
-from Emilia.utils.cache import anonymous_admin_cache
+from Emilia.utils.cache import anonymous_admin_cache, playmenu_cache
 
 chats = db.chats
 
@@ -26,4 +26,29 @@ async def get_anon_setting_cached(chat_id) -> bool:
 
     val = await get_anon_setting(chat_id)
     await anonymous_admin_cache.set(key, val)
+    return val
+
+
+async def playmenu_db(chat_id: int, arg: bool):
+    await chats.update_one(
+        {"chat_id": chat_id}, {"$set": {"playmenu": arg}}, upsert=True
+    )
+    # Update cache
+    key = f"playmenu:{chat_id}"
+    await playmenu_cache.set(key, arg)
+
+
+async def get_playmenu_setting(chat_id: int) -> bool:
+    doc = await chats.find_one({"chat_id": chat_id}, {"_id": 0, "playmenu": 1})
+    return doc.get("playmenu", False) if doc else False
+
+
+async def get_playmenu_setting_cached(chat_id: int) -> bool:
+    key = f"playmenu:{chat_id}"
+    cached = await playmenu_cache.get(key)
+    if cached is not None:
+        return cached
+
+    val = await get_playmenu_setting(chat_id)
+    await playmenu_cache.set(key, val)
     return val

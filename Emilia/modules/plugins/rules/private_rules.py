@@ -38,21 +38,17 @@ async def private_rules(client, message):
         args = command[1]
 
         if args in PRIVATE_RULES_TRUE:
-            await message.reply(
-                "Use of /rules will send the rules to the user's PM."
-            )
+            await message.reply("Use of /rules will send the rules to the user's PM.")
             await set_private_rule(chat_id, True)
 
         elif args in PRIVATE_RULES_FALSE:
             await message.reply(
                 f"All /rules commands will send the rules to {html.escape(chat_title)}.",
-                )
+            )
             await set_private_rule(chat_id, False)
 
         else:
-            await message.reply(
-                "I only understand the following: yes/no/on/off"
-            )
+            await message.reply("I only understand the following: yes/no/on/off")
     else:
         if await get_private_note(chat_id):
             await message.reply("Use of /rules will send the rules to the user's PM.")

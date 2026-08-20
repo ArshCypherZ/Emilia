@@ -3,7 +3,7 @@ __mod_name__ = "Example Usage"
 __hidden__ = True
 
 __help__ = """
-Filters can seem quite complicated; so here are some examples, so you can get some inspiration.
+> Filters can seem quite complicated; so here are some examples, so you can get some inspiration.
 
 **Examples**:
 

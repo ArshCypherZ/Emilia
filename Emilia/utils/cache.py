@@ -234,11 +234,17 @@ admin_cache = MultiLevelCache(
 blocklist_cache = MultiLevelCache(
     Config.REDIS_URL, Config.REDIS_PASSWORD, default_ttl=180, namespace="blocklist"
 )
+linked_chat_cache = MultiLevelCache(
+    Config.REDIS_URL, Config.REDIS_PASSWORD, default_ttl=900, namespace="linked_chat"
+)
 anonymous_admin_cache = MultiLevelCache(
     Config.REDIS_URL, Config.REDIS_PASSWORD, default_ttl=300, namespace="anon_admin"
 )
 approvals_cache = MultiLevelCache(
     Config.REDIS_URL, Config.REDIS_PASSWORD, default_ttl=180, namespace="approvals"
+)
+playmenu_cache = MultiLevelCache(
+    Config.REDIS_URL, Config.REDIS_PASSWORD, default_ttl=300, namespace="playmenu"
 )
 
 

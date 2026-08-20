@@ -28,7 +28,7 @@ async def SetCaptchatext(client, message):
     if not await isBotAdmin(message, silent=True):
         await message.reply(
             "I need to be admin with the right to restrict to enable CAPTCHAs.",
-            )
+        )
         return
 
     CaptchaText = " ".join(message.text.split()[1:])
@@ -47,4 +47,4 @@ async def SetCaptchatext(client, message):
                 f"`{captcha_text}`\n\n"
                 "To change the text, try this command again followed by your new text"
             ),
-            )
+        )

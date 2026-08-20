@@ -4,6 +4,7 @@ from traceback import format_exc as err
 
 import tracemoepy
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -175,7 +176,9 @@ async def tracemoe_btn(client: Client, cq: CallbackQuery):
         button.append(
             [
                 InlineKeyboardButton(
-                    "Back", callback_data=f"tracech_{int(page)-1}_{dls_loc}_{user}"
+                    "Back",
+                    callback_data=f"tracech_{int(page)-1}_{dls_loc}_{user}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         )
@@ -183,7 +186,9 @@ async def tracemoe_btn(client: Client, cq: CallbackQuery):
         button.append(
             [
                 InlineKeyboardButton(
-                    "Back", callback_data=f"tracech_{int(page)-1}_{dls_loc}_{user}"
+                    "Back",
+                    callback_data=f"tracech_{int(page)-1}_{dls_loc}_{user}",
+                    style=ButtonStyle.PRIMARY,
                 ),
                 InlineKeyboardButton(
                     "》", callback_data=f"tracech_{int(page)+1}_{dls_loc}_{user}"

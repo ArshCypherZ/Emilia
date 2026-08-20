@@ -23,6 +23,4 @@ async def reconnectC(client, message):
             await reconnectChat(user_id)
             await message.reply(f"You're now reconnected to {chat_title}.")
     else:
-        await message.reply(
-            "You haven't made a connection to any chats yet."
-        )
+        await message.reply("You haven't made a connection to any chats yet.")

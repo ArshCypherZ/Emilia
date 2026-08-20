@@ -2,6 +2,7 @@ import html
 from typing import Union
 
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -25,6 +26,7 @@ async def ruleCaptchaButton(
                 InlineKeyboardButton(
                     text="I have read and accept the rules",
                     callback_data=f"captcharule_{chat_id}_{message_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         ]
@@ -60,6 +62,7 @@ async def captchaRules(client: Client, callback_query: CallbackQuery):
                 InlineKeyboardButton(
                     text="Go Back to the chat",
                     url=f"http://t.me/c/{str_chat_id}/{message_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         ]

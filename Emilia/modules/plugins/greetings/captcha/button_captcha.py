@@ -93,7 +93,7 @@ async def buttonCaptchaRedirect(client, message):
                 if await isUserVerified(new_chat_id, new_user_id):
                     await message.reply(
                         "You already passed the CAPTCHA, You don't need to verify yourself again.",
-                        )
+                    )
                     return
 
             # Admins captcha message

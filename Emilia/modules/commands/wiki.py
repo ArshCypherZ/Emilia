@@ -4,13 +4,13 @@ import asyncio
 
 import wikipedia
 from pyrogram.enums import ParseMode
+from pyrogram.types import LinkPreviewOptions
 from wikipedia.exceptions import DisambiguationError, PageError
 
 from Emilia import LOGGER
 from Emilia.custom_filter import register
 from Emilia.helper.disable import disable
 from Emilia.utils.decorators import *
-from pyrogram.types import LinkPreviewOptions
 
 
 def _wikipedia_summary_sync(search):
@@ -63,5 +63,7 @@ async def wiki(client, message):
         )
     else:
         await message.reply_text(
-            result, parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True)
+            result,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )

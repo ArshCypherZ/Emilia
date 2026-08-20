@@ -86,6 +86,8 @@ async def chk_(client, message):
                 txt += f"**Reason:** `{chec['reason']}`\n"
                 txt += f"**Enforcer:** `{chec['enforcer']}`\n\n"
                 txt += "Report for unban at @VanitasSupport"
-                await message.reply_text(txt, link_preview_options=LinkPreviewOptions(is_disabled=True))
+                await message.reply_text(
+                    txt, link_preview_options=LinkPreviewOptions(is_disabled=True)
+                )
             except Exception as er:
                 await message.reply_text(str(er))

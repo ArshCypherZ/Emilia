@@ -1,9 +1,10 @@
 """PYROGRAM privileges"""
 
+import asyncio
 from typing import List, Union
 
 from pyrogram.enums import ChatMemberStatus, ChatType
-from pyrogram.errors import PeerIdInvalid, UserNotParticipant
+from pyrogram.errors import PeerIdInvalid, UserNotParticipant, FloodWait
 from pyrogram.types import Message
 
 from Emilia import BOT_ID, DEV_USERS, LOGGER
@@ -87,6 +88,13 @@ async def get_chat_member_cached(client, chat_id: int, user_id: int):
     # L3 API Call
     try:
         member = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
+    except FloodWait as fw:
+        LOGGER.warning(f"FloodWait in get_chat_member_cached({chat_id},{user_id}): waiting {fw.value}s")
+        await asyncio.sleep(fw.value)
+        try:
+            member = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
+        except Exception:
+            return None
     except UserNotParticipant:
         # Expected/frequent - the user simply isn't in the chat, not an error.
         return None

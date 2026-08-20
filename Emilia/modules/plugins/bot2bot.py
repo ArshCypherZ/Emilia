@@ -37,7 +37,7 @@ async def bot2bot(client, message):
                 f"Bot-to-bot command mode is `{settings['mode']}`.\n"
                 f"Skip review is `{'on' if settings['skip_review'] else 'off'}`."
             ),
-            )
+        )
         return
 
     mode = args[1].lower()
@@ -61,7 +61,7 @@ async def bot2botskipreview(client, message):
         settings = await get_bot2bot_settings(chat_id)
         await message.reply(
             f"Bot-to-bot skip review is `{'on' if settings['skip_review'] else 'off'}`.",
-            )
+        )
         return
 
     value = args[1].lower()
@@ -76,7 +76,7 @@ async def bot2botskipreview(client, message):
     await set_bot2bot_skip_review(chat_id, skip_review)
     await message.reply(
         f"Bot-to-bot skip review set to `{'on' if skip_review else 'off'}`.",
-        )
+    )
 
 
 @Client.on_callback_query(filters.regex(r"^b2b:(ok|no):"))

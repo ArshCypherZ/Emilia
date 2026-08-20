@@ -4,16 +4,17 @@ import traceback
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from pymongo.errors import DuplicateKeyError
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.errors import (
     ChatWriteForbidden,
     FloodWait,
     UserIsBlocked,
     UserNotParticipant,
+    MessageNotModified,
 )
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
-from pymongo.errors import DuplicateKeyError
 
 from Emilia import (
     BOT_USERNAME,
@@ -27,10 +28,7 @@ from Emilia import (
     db,
 )
 from Emilia.custom_filter import auth, callbackquery, listen, register
-from Emilia.modules.commands.clone_manager import (
-    _remove_session_files,
-    clone_manager,
-)
+from Emilia.modules.commands.clone_manager import _remove_session_files, clone_manager
 from Emilia.utils import async_http
 from Emilia.utils.net_guard import is_safe_url
 
@@ -368,6 +366,7 @@ async def clone_bot(client, message):
                         InlineKeyboardButton(
                             f"Add @{bot_username} to a group",
                             url=f"https://t.me/{bot_username}?startgroup=true",
+                            style=ButtonStyle.SUCCESS,
                         )
                     ],
                     [
@@ -379,6 +378,7 @@ async def clone_bot(client, message):
                         InlineKeyboardButton(
                             "Clone guide",
                             url=f"https://t.me/{BOT_USERNAME}?start=help_clone",
+                            style=ButtonStyle.PRIMARY,
                         )
                     ],
                 ]
@@ -423,12 +423,17 @@ async def delete_cloned(client, message):
             InlineKeyboardButton(
                 f"Delete @{d.get('bot_username')}",
                 callback_data=f"delclone_{d['_id']}",
+                style=ButtonStyle.DANGER,
             )
         ]
         for d in docs
     ]
     keyboard.append(
-        [InlineKeyboardButton("Cancel", callback_data="delclone_cancel")]
+        [
+            InlineKeyboardButton(
+                "Cancel", callback_data="delclone_cancel", style=ButtonStyle.DANGER
+            )
+        ]
     )
     await message.reply_text(
         "Select the clone you want to delete:",
@@ -499,16 +504,26 @@ async def render_bot_panel(bot_id):
         [
             [
                 InlineKeyboardButton(
-                    "Restart", callback_data=f"cbot_restart_{bot_id}"
+                    "Restart",
+                    callback_data=f"cbot_restart_{bot_id}",
+                    style=ButtonStyle.PRIMARY,
                 ),
-                InlineKeyboardButton("Delete", callback_data=f"cbot_del_{bot_id}"),
+                InlineKeyboardButton(
+                    "Delete",
+                    callback_data=f"cbot_del_{bot_id}",
+                    style=ButtonStyle.DANGER,
+                ),
             ],
             [
                 InlineKeyboardButton(
-                    "Start pic", callback_data=f"cbot_pic_{bot_id}"
+                    "Start pic",
+                    callback_data=f"cbot_pic_{bot_id}",
+                    style=ButtonStyle.PRIMARY,
                 ),
                 InlineKeyboardButton(
-                    "Broadcast help", callback_data=f"cbot_bc_{bot_id}"
+                    "Broadcast help",
+                    callback_data=f"cbot_bc_{bot_id}",
+                    style=ButtonStyle.PRIMARY,
                 ),
             ],
             [InlineKeyboardButton("All bots", callback_data="mybots_list")],
@@ -588,31 +603,32 @@ async def cbot_callback(client, query):
         await clone_manager.stop_clone(bot_id)
         result, _, _ = await clone(doc["owner_id"], doc["token"], bot_id)
         if result == "success":
-            await clone_db.update_one(
-                {"_id": bot_id}, {"$set": {"status": "running"}}
-            )
+            await clone_db.update_one({"_id": bot_id}, {"$set": {"status": "running"}})
         elif result in ("invalid", "dead"):
             # Token no longer works; flag the clone dead so the owner knows to
             # re-create it with a fresh @BotFather token instead of retrying.
-            await clone_db.update_one(
-                {"_id": bot_id}, {"$set": {"status": "dead"}}
-            )
+            await clone_db.update_one({"_id": bot_id}, {"$set": {"status": "dead"}})
         else:
-            await clone_db.update_one(
-                {"_id": bot_id}, {"$set": {"status": "stopped"}}
-            )
+            await clone_db.update_one({"_id": bot_id}, {"$set": {"status": "stopped"}})
         text, keyboard = await render_bot_panel(bot_id)
-        return await query.message.edit_text(text, reply_markup=keyboard)
+        try:
+            return await query.message.edit_text(text, reply_markup=keyboard)
+        except MessageNotModified:
+            pass
 
     if action == "del":
         keyboard = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "Yes", callback_data=f"delclone_{bot_id}"
+                        "Yes",
+                        callback_data=f"delclone_{bot_id}",
+                        style=ButtonStyle.SUCCESS,
                     ),
                     InlineKeyboardButton(
-                        "Back", callback_data=f"mybots_{bot_id}"
+                        "Back",
+                        callback_data=f"mybots_{bot_id}",
+                        style=ButtonStyle.PRIMARY,
                     ),
                 ]
             ]
@@ -629,7 +645,15 @@ async def cbot_callback(client, query):
         # the clone client (file_ids are bot-scoped), URLs are stored directly.
         _PENDING_STARTPIC[query.from_user.id] = bot_id
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Cancel", callback_data=f"cbot_piccancel_{bot_id}")]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "Cancel",
+                        callback_data=f"cbot_piccancel_{bot_id}",
+                        style=ButtonStyle.DANGER,
+                    )
+                ]
+            ]
         )
         await query.message.edit_text(
             f"Send a photo or an image URL now and I'll set it as @{username}'s "
@@ -646,7 +670,15 @@ async def cbot_callback(client, query):
 
     if action == "bc":
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Back", callback_data=f"mybots_{bot_id}")]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "Back",
+                        callback_data=f"mybots_{bot_id}",
+                        style=ButtonStyle.PRIMARY,
+                    )
+                ]
+            ]
         )
         await query.message.edit_text(
             f"Send /broadcast in a chat with @{username}, replying to the message "
@@ -780,16 +812,12 @@ async def startpic_conversation(client, message):
         clone_client = clone_manager.clones[bot_id]["client"]
         path = None
         try:
-            path = await client.download_media(
-                message.photo.file_id, in_memory=False
-            )
+            path = await client.download_media(message.photo.file_id, in_memory=False)
             # A bot can't send to itself (USER_IS_BOT), so re-upload the photo
             # to the owner's chat with the clone to mint a clone-valid file_id,
             # then delete that throwaway message.
             sent = await clone_client.send_photo(user_id, path)
-            await _save_clone_startpic(
-                bot_id, user_id, "file_id", sent.photo.file_id
-            )
+            await _save_clone_startpic(bot_id, user_id, "file_id", sent.photo.file_id)
             try:
                 await sent.delete()
             except Exception:
@@ -839,9 +867,7 @@ async def startpic_conversation(client, message):
             "Start picture updated. It's live on your clone now."
         )
 
-    return await message.reply_text(
-        "Send a photo or an image URL, or /cancel."
-    )
+    return await message.reply_text("Send a photo or an image URL, or /cancel.")
 
 
 @register(pattern="broadcast")
@@ -937,8 +963,14 @@ async def broadcast_to_users(bot_id, message, wait):
             failed += 1
 
         if (success + failed) % 200 == 0:
+            chat_id = wait.chat.id
+            client = wait._client
             try:
-                await wait.edit_text(f"Broadcasting... {success + failed} done")
+                await wait.delete()
+            except Exception:
+                pass
+            try:
+                wait = await client.send_message(chat_id, f"Broadcasting... {success + failed} done")
             except Exception:
                 pass
 
@@ -969,8 +1001,14 @@ async def broadcast_to_chats(bot_id, message, wait):
             failed += 1
 
         if (success + failed) % 200 == 0:
+            chat_id = wait.chat.id
+            client = wait._client
             try:
-                await wait.edit_text(f"Broadcasting... {success + failed} done")
+                await wait.delete()
+            except Exception:
+                pass
+            try:
+                wait = await client.send_message(chat_id, f"Broadcasting... {success + failed} done")
             except Exception:
                 pass
 
@@ -987,7 +1025,9 @@ async def clone_stats(client, message):
         return await message.reply_text("Only the clone owner can use this.")
     users = await db.users.count_documents({"bot_ids": me.id})
     chats = await db.chats.count_documents({"bot_ids": me.id})
-    await message.reply_text(f"**@{me.username} stats**\n\nUsers: {users}\nChats: {chats}")
+    await message.reply_text(
+        f"**@{me.username} stats**\n\nUsers: {users}\nChats: {chats}"
+    )
 
 
 @auth(pattern="clonestatus")
@@ -1077,12 +1117,8 @@ async def clone_successful_payment(client, message):
             f"@{SUPPORT_CHAT} with this id: `{charge_id}`"
         )
 
-    await clone_slots.update_one(
-        {"_id": user_id}, {"$inc": {"extra": 1}}, upsert=True
-    )
-    await clone_payments.update_one(
-        {"_id": charge_id}, {"$set": {"granted": True}}
-    )
+    await clone_slots.update_one({"_id": user_id}, {"$inc": {"extra": 1}}, upsert=True)
+    await clone_payments.update_one({"_id": charge_id}, {"$set": {"granted": True}})
     await message.reply_text(
         "Payment received. One extra clone slot unlocked - use /clone to create it."
     )
@@ -1120,9 +1156,7 @@ async def refund_star(client, message):
     await clone_slots.update_one(
         {"_id": record["user_id"], "extra": {"$gt": 0}}, {"$inc": {"extra": -1}}
     )
-    await clone_payments.update_one(
-        {"_id": charge_id}, {"$set": {"refunded": True}}
-    )
+    await clone_payments.update_one({"_id": charge_id}, {"$set": {"refunded": True}})
     await message.reply_text(
         f"Refunded {record.get('stars')} Stars to `{record['user_id']}` and "
         f"removed the extra slot."
@@ -1133,19 +1167,13 @@ async def refund_star(client, message):
 async def clone_payments_list(client, message):
     if getattr(client, "is_clone", False):
         return
-    docs = (
-        await clone_payments.find({})
-        .sort("created_at", -1)
-        .to_list(length=20)
-    )
+    docs = await clone_payments.find({}).sort("created_at", -1).to_list(length=20)
     if not docs:
         return await message.reply_text("No clone payments recorded.")
     lines = ["**Recent clone payments**\n"]
     for d in docs:
         flag = " (refunded)" if d.get("refunded") else ""
-        lines.append(
-            f"`{d['_id']}` - user `{d['user_id']}`, {d.get('stars')}*{flag}"
-        )
+        lines.append(f"`{d['_id']}` - user `{d['user_id']}`, {d.get('stars')}*{flag}")
     await message.reply_text("\n".join(lines))
 
 

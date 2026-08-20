@@ -1,4 +1,5 @@
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import custom_filter
@@ -15,7 +16,9 @@ async def unpinall(client, message):
     button = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(text="Yes", callback_data="unpin_yes"),
+                InlineKeyboardButton(
+                    text="Yes", callback_data="unpin_yes", style=ButtonStyle.SUCCESS
+                ),
                 InlineKeyboardButton(text="No", callback_data="unpin_no"),
             ]
         ]

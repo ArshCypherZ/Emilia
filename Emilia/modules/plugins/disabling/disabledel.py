@@ -27,9 +27,7 @@ async def disabledel(client, message):
     ):
         return await message.reply(strings.is_pvt)
 
-    if not await check_bot(
-        message, privileges="can_delete_messages", chat_id=chat_id
-    ):
+    if not await check_bot(message, privileges="can_delete_messages", chat_id=chat_id):
         return
 
     if not await check_user(

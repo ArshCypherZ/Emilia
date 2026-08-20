@@ -25,6 +25,8 @@ services:
       EMILIA_ZIPLINE_USERNAME: ${EMILIA_ZIPLINE_USERNAME:-emilia}
       EMILIA_ZIPLINE_PASSWORD: ${EMILIA_ZIPLINE_PASSWORD:?EMILIA_ZIPLINE_PASSWORD is required}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - emilia_sessions:/app/sessions
     depends_on:
       - redis
     pull_policy: never
@@ -41,6 +43,14 @@ services:
     restart: unless-stopped
     network_mode: host
 
+  quote-api:
+    build: https://github.com/LyoSU/quote-api.git
+    container_name: quote-api
+    network_mode: host
+    environment:
+      PORT: 8432
+    restart: unless-stopped
+
 networks:
   default: 
     external: true
@@ -48,3 +58,4 @@ networks:
 
 volumes:
   redis_data:
+  emilia_sessions:

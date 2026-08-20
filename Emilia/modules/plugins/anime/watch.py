@@ -1,4 +1,5 @@
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -99,7 +100,13 @@ async def watch_(client: Client, cq: CallbackQuery, cdata: dict):
                     ),
                 ]
             )
-    button.append([InlineKeyboardButton("Back", callback_data=f"wol_{user}_{token}")])
+    button.append(
+        [
+            InlineKeyboardButton(
+                "Back", callback_data=f"wol_{user}_{token}", style=ButtonStyle.PRIMARY
+            )
+        ]
+    )
     await cq.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(button))
 
 

@@ -3,7 +3,7 @@ __mod_name__ = "Blocklist Command Examples"
 __hidden__ = True
 
 __help__ = """
-If you're still curious as to how blocklists work, here are some examples you can copy.
+> If you're still curious as to how blocklists work, here are some examples you can copy.
 
 **Example blocklist commands**:
 • Automatically warn users who say blocklisted words:

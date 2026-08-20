@@ -91,7 +91,12 @@ async def afk_check(client, message):
                     user_id = None
                 except FloodWait:
                     user_id = None
-                except (PeerIdInvalid, UsernameInvalid, UsernameNotOccupied, IndexError):
+                except (
+                    PeerIdInvalid,
+                    UsernameInvalid,
+                    UsernameNotOccupied,
+                    IndexError,
+                ):
                     # pyrogram raises these instead of ValueError for bad
                     # usernames
                     user_id = None

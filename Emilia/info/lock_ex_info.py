@@ -3,7 +3,7 @@ __mod_name__ = "Example commands"
 __hidden__ = True
 
 __help__ = """
-Locks are a powerful tool, with lots of different options. So here are a few examples to get you started and familiar on how exactly to use them.
+> Locks are a powerful tool, with lots of different options. So here are a few examples to get you started and familiar on how exactly to use them.
 
 **Examples**:
 • Stop all users from sending stickers with:

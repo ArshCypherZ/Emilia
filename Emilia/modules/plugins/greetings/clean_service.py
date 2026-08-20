@@ -29,9 +29,7 @@ async def CleanService(client, message):
         if get_clean_service in CLEAN_SERVICE_TRUE:
             clean_service = True
             await SetCleanService(chat_id, clean_service)
-            await message.reply(
-                "I'll be deleting all service messages from now on!"
-            )
+            await message.reply("I'll be deleting all service messages from now on!")
 
         elif get_clean_service in CLEAN_SERVICE_FALSE:
             clean_service = False
@@ -53,4 +51,4 @@ async def CleanService(client, message):
                 f"{CleanServiceis}\n\n"
                 "To change this setting, try this command again followed by one of yes/no/on/off"
             ),
-            )
+        )

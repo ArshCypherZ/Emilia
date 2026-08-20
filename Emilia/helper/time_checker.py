@@ -76,20 +76,27 @@ async def time_string_helper(time_args):
 
 
 async def time_converter(message: Message, time_value: str) -> datetime:
-    unit = ["m", "h", "d"]  # m == minutes | h == hours | d == days
+    if not time_value or not isinstance(time_value, str):
+        await message.reply_text("Incorrect time specified.")
+        return None
+    unit = ["m", "h", "d", "w"]  # m == minutes | h == hours | d == days | w == weeks
     check_unit = "".join(list(filter(time_value[-1].lower().endswith, unit)))
     currunt_time = datetime.now()
     time_digit = time_value[:-1]
     if not time_digit.isdigit():
-        return await message.reply_text("Incorrect time specified")
+        await message.reply_text("Incorrect time specified")
+        return None
     if check_unit == "m":
         temp_time = currunt_time + timedelta(minutes=int(time_digit))
     elif check_unit == "h":
         temp_time = currunt_time + timedelta(hours=int(time_digit))
     elif check_unit == "d":
         temp_time = currunt_time + timedelta(days=int(time_digit))
+    elif check_unit == "w":
+        temp_time = currunt_time + timedelta(weeks=int(time_digit))
     else:
-        return await message.reply_text("Incorrect time specified.")
+        await message.reply_text("Incorrect time specified.")
+        return None
     return temp_time
 
 

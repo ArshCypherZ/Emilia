@@ -5,7 +5,7 @@ __sub_mod__ = ["Karma"]
 __help__ = f"""
 **Leveling System**
 
-The Leveling System rewards active participation in group chats. Users earn Experience Points (XP) by chatting, which unlocks new Ranks and features.
+> The Leveling System rewards active participation in group chats. Users earn Experience Points (XP) by chatting, which unlocks new Ranks and features.
 
 **Core Commands:**
 • `/register [name]` - Create your profile to start earning XP.

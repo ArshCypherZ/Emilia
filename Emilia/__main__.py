@@ -18,6 +18,7 @@ from Emilia.modules.commands.clone import (
     clone_start_up,
     shutdown_all_clones,
 )
+from Emilia.modules.plugins.music.core.call import emilia_call, assistant
 from Emilia.modules.plugins.nightmode import start_nightmode_scheduler
 from Emilia.mongo.users_mongo import WRITE_BUFFER
 from Emilia.utils.helper import j1 as helper_scheduler
@@ -100,21 +101,24 @@ async def start_pgram():
     # Bounded retry for transient startup network errors; a persistent failure
     # (bad token, etc.) propagates so main() exits nonzero and the supervisor
     # restarts the container instead of leaving a half-alive process.
-    # pgram is constructed at import time (Emilia/__init__.py), before this
-    # coroutine's loop exists. Client.loop is normally resolved lazily on first
-    # use (pyrogram.utils.get_event_loop()); pinning it explicitly, once, to the
-    # loop actually driving this retry loop rules out that lazy resolution ever
-    # returning a stale loop on a later attempt (the cause of a
-    # "Session.recv_worker() ... attached to a different loop" crash seen here).
-    pgram.loop = asyncio.get_running_loop()
+
 
     from Emilia.custom_filter import flush_pending_handlers
-
-    flush_pending_handlers()
 
     for attempt in range(1, 4):
         try:
             await pgram.start()
+            flush_pending_handlers()
+            try:
+                await assistant.start()
+                LOGGER.info("Music Assistant Client started.")
+            except Exception as ex:
+                LOGGER.error(f"Failed to start Music Assistant: {ex}")
+            try:
+                await emilia_call.start()
+                LOGGER.info("PyTgCalls music core started.")
+            except Exception as ex:
+                LOGGER.error(f"Failed to start PyTgCalls: {ex}")
             break
         except Exception as e:
             LOGGER.error(f"Failed to start pgram client (attempt {attempt}/3): {e}")
@@ -165,13 +169,6 @@ async def main():
     await ensure_redis_master()
     await create_indexes()
 
-    try:
-        from scripts.migrate_clone_schema import main as _migrate_clones
-
-        await _migrate_clones()
-    except Exception as e:
-        LOGGER.error(f"Clone schema migration failed: {e}")
-
     import_modules()
     LOGGER.info("All modules loaded.")
 
@@ -204,6 +201,23 @@ async def main():
     spawn(_delayed_backup(), name="delayed_backup")
 
     spawn(WRITE_BUFFER.start(), name="write_buffer_start")
+
+    try:
+        from Emilia.modules.plugins.music.core.youtube import start_cleanup_task
+        spawn(start_cleanup_task(), name="music_cleanup")
+        LOGGER.info("Started music file cleanup task.")
+    except Exception:
+        pass
+
+    try:
+        from Emilia.modules.plugins.music.playlist.core import (
+            start_trending_refresh_task,
+        )
+
+        spawn(start_trending_refresh_task(), name="playlist_trending")
+        LOGGER.info("Started playlist trending score refresher.")
+    except Exception as e:
+        LOGGER.error(f"Failed to start playlist trending refresher: {e}")
 
     from Emilia.modules.commands.clone_manager import clone_manager
 
@@ -328,7 +342,8 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        uvloop.run(main())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         LOGGER.info("Bot stopped via KeyboardInterrupt.")
     finally:

@@ -41,6 +41,7 @@ class Config(object):
     ANILIST_CLIENT = 100
     ANILIST_SECRET = "NTRA"
     ANILIST_REDIRECT_URL = "https://anilist.co/api/v2/oauth/pin"
+    SESSION_STRING = "sessions string for music userbot"
 
 
 class Production(Config):

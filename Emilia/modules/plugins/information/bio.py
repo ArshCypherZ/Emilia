@@ -2,6 +2,7 @@ import os
 from asyncio import sleep
 
 from pyrogram import Client, enums, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.errors import BadRequest, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from vanitaspy import User
@@ -19,7 +20,13 @@ db_ = db.users
 chatlevels = db.chatlevels
 
 btn = InlineKeyboardMarkup(
-    [[InlineKeyboardButton("Close", callback_data="close_info")]]
+    [
+        [
+            InlineKeyboardButton(
+                "Close", callback_data="close_info", style=ButtonStyle.DANGER
+            )
+        ]
+    ]
 )
 
 

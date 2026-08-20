@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+
 from pyrogram.types import LinkPreviewOptions
 
 from Emilia import LOGGER
@@ -57,7 +58,9 @@ async def _(client, message):
             start = datetime.now()
             media_urls = await upload_local_file(downloaded_file_name)
         except Exception as exc:
-            LOGGER.exception(f"tgm: upload_local_file failed for {downloaded_file_name}")
+            LOGGER.exception(
+                f"tgm: upload_local_file failed for {downloaded_file_name}"
+            )
             await h.edit_text(f"Upload failed: `{exc}`")
         else:
             end = datetime.now()

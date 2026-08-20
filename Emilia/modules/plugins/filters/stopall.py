@@ -1,7 +1,7 @@
 import html
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import custom_filter
@@ -32,10 +32,18 @@ async def stopall(_, message):
         [
             [
                 InlineKeyboardButton(
-                    text="Delete all filters", callback_data="filters_stopall"
+                    text="Delete all filters",
+                    callback_data="filters_stopall",
+                    style=ButtonStyle.DANGER,
                 )
             ],
-            [InlineKeyboardButton(text="Cancel", callback_data="filters_cancel")],
+            [
+                InlineKeyboardButton(
+                    text="Cancel",
+                    callback_data="filters_cancel",
+                    style=ButtonStyle.PRIMARY,
+                )
+            ],
         ]
     )
 

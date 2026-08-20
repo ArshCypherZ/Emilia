@@ -73,7 +73,7 @@ async def SendNoteMessage(client, message: Message, note_name: str, from_chat_id
                 text=text,
                 reply_to_message_id=message_id,
                 reply_markup=buttons_to_bot_api_markup(buttons),
-                disable_web_page_preview=preview,
+                link_preview_options={"is_disabled": preview},
                 parse_mode="HTML",
             )
             return

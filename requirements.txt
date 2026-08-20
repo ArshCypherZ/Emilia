@@ -48,3 +48,15 @@ uvloop
 redis>=5.0.0
 orjson
 psutil>=5.9.0
+
+# music & voice calls
+py-tgcalls
+yt-dlp
+yt-dlp-ejs
+curl_cffi
+pycryptodomex
+brotli
+
+# playlist share QR codes (pure-Python, no native deps)
+segno
+

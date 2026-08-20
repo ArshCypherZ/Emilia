@@ -11,14 +11,15 @@ from Emilia.modules.plugins.locks import lock_map
 from Emilia.modules.plugins.warnings.warn import warn
 from Emilia.mongo.locks_mongo import get_allowlist, get_locks, lockwarns_db
 from Emilia.utils.cache import SimpleCache, approvals_cache
+from Emilia.modules.plugins.pin.cleanlinked_checker import GetLinkedChannel
 
 collection = db["approve_d"]
 
 # Compile regex patterns once for better performance
 PHONE_REGEX = re.compile(r"[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]")
 EMAIL_REGEX = re.compile(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+")
-# RTL heuristic: any char within known RTL unicode ranges
-RTL_CHAR_REGEX = re.compile(r"[\u0590-\u08FF\uFB1D-\uFEFC]")
+# RTL heuristic: any char within known RTL unicode ranges (excluding variation selectors like U+FE0F)
+RTL_CHAR_REGEX = re.compile(r"[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]")
 
 # Cache for URL extractor to avoid recreating it
 URL_EXTRACTOR = URLExtract()
@@ -108,8 +109,7 @@ async def locks_checker(client, message):
             if reply_fwd_chat.type == enums.ChatType.CHANNEL:
                 from_user = message.from_user.id
                 channel_id = reply_fwd_chat.id
-                chat_data = await client.get_chat(chat_id=chat_id)
-                linked_chat = chat_data.linked_chat.id
+                linked_chat = await GetLinkedChannel(client, chat_id=chat_id)
                 if linked_chat == channel_id:
                     chat_member = await client.get_chat_member(
                         chat_id=chat_id, user_id=from_user
@@ -298,6 +298,43 @@ async def locks_checker(client, message):
             message, "guest_bot_caller_chat", None
         ):
             await lock_action(client, message, action=lock_map.LocksMap.guestbot.value)
+
+    if (
+        lock_map.LocksMap.spoiler.value in LOCKS_LIST
+        or lock_map.LocksMap.format.value in LOCKS_LIST
+        or lock_map.LocksMap.code.value in LOCKS_LIST
+    ):
+        entities = []
+        if message.entities:
+            entities.extend(message.entities)
+        if message.caption_entities:
+            entities.extend(message.caption_entities)
+            
+        if entities:
+            has_spoiler = False
+            has_format = False
+            has_code = False
+            
+            for ent in entities:
+                if ent.type == enums.MessageEntityType.SPOILER:
+                    has_spoiler = True
+                elif ent.type in {
+                    enums.MessageEntityType.BOLD,
+                    enums.MessageEntityType.ITALIC,
+                    enums.MessageEntityType.UNDERLINE,
+                    enums.MessageEntityType.STRIKETHROUGH,
+                    enums.MessageEntityType.BLOCKQUOTE,
+                }:
+                    has_format = True
+                elif ent.type in {enums.MessageEntityType.CODE, enums.MessageEntityType.PRE}:
+                    has_code = True
+            
+            if has_spoiler and lock_map.LocksMap.spoiler.value in LOCKS_LIST:
+                await lock_action(client, message, action=lock_map.LocksMap.spoiler.value)
+            elif has_format and lock_map.LocksMap.format.value in LOCKS_LIST:
+                await lock_action(client, message, action=lock_map.LocksMap.format.value)
+            elif has_code and lock_map.LocksMap.code.value in LOCKS_LIST:
+                await lock_action(client, message, action=lock_map.LocksMap.code.value)
 
 
 async def lock_action(client, message, action: int = None, delete: bool = True):

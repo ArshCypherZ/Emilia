@@ -32,7 +32,7 @@ async def set_log(client, message):
     if message.chat.type == ChatType.PRIVATE:
         await message.reply(
             "This command can only be used in groups and channels, not in PMs.",
-            )
+        )
         return
 
     if not await isUserCreator(message, chat_id=chat_id):
@@ -43,7 +43,7 @@ async def set_log(client, message):
     if not (fwd_chat_ and fwd_chat_.type == ChatType.CHANNEL):
         await message.reply(
             "You need to forward the /setlog message from a channel to set that channel as this chat's log channel. More info in /help.",
-            )
+        )
         return
 
     try:
@@ -54,7 +54,7 @@ async def set_log(client, message):
     except BaseException:
         await message.reply(
             "I'm not in the channel, make me an admin there and then repeat the command.",
-            )
+        )
         return
 
     if GetChannelData:
@@ -64,7 +64,7 @@ async def set_log(client, message):
             await set_log_db(chat_id, channel_id, channel_title)
             await message.reply(
                 f"Successfully set log channel to {html.escape(channel_title)}. Further admin actions will be logged there.",
-                )
+            )
 
             await client.send_message(
                 chat_id=channel_id,
@@ -76,4 +76,4 @@ async def set_log(client, message):
         else:
             await message.reply(
                 "I don't have rights to `can_post_messages` in the channel, make sure I have admin rights.",
-                )
+            )

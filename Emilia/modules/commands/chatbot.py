@@ -15,11 +15,12 @@ from Emilia import BOT_ID, CARTESIA_API_KEY, GROQ_API_KEY, LOGGER, db
 from Emilia.custom_filter import listen, register
 from Emilia.helper.admins import is_admin
 from Emilia.utils.async_http import post as async_post
+from Emilia.utils.errors import report_error
 
 # ─── Configuration ──────────────────────────────────────────────────────
 
-MODEL = "llama-3.3-70b-versatile"
-MEMORY_MODEL = "llama-3.1-8b-instant"
+MODEL = "qwen/qwen3.6-27b"
+MEMORY_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TEMPERATURE = 0.8
 DEFAULT_MAX_TOKENS = 768
 MAX_HISTORY = 50
@@ -131,6 +132,7 @@ class GroqChatSession:
                 "messages": self.history,
                 "temperature": DEFAULT_TEMPERATURE,
                 "max_tokens": DEFAULT_MAX_TOKENS,
+                "reasoning_effort": "none",
             }
             if TOOLS:
                 kwargs["tools"] = TOOLS
@@ -359,7 +361,7 @@ async def createChatForUser(user_id: int, sys_inst: str):
         purgeSessions()
         return chat, True
     except Exception as e:
-        LOGGER.error(f"[GroqChat] Session creation failed for {user_id}: {e}")
+        await report_error("chatbot.session", e, user_id=user_id)
         return None, False
 
 
@@ -394,6 +396,7 @@ async def updateUserMemory(user_id: int, user_text: str, bot_text: str):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=128,
+            reasoning_effort="low",
         )
         facts = (completion.choices[0].message.content or "").strip()
         if not facts:
@@ -425,11 +428,11 @@ async def updateUserMemory(user_id: int, user_text: str, bot_text: str):
 async def handleChatRequest(message, query: str) -> Optional[ChatResponse]:
     """Get an LLM response (text or voice) for the user's message."""
     user_id = message.from_user.id if message.from_user else None
-    chat, _ = await getOrCreateChat(user_id)
-    if not chat:
-        return None
-
     try:
+        chat, _ = await getOrCreateChat(user_id)
+        if not chat:
+            return None
+
         response = await chat.send(query)
         if response:
             mem_text = response.text or response.voice_text or ""
@@ -449,20 +452,30 @@ async def handleChatRequest(message, query: str) -> Optional[ChatResponse]:
             try:
                 await asyncio.sleep(delay)
                 return await chat.send(query)
-            except Exception:
-                LOGGER.error(f"[GroqChat] Retry failed for {user_id}")
+            except Exception as retry_error:
+                await report_error(
+                    "chatbot.retry",
+                    retry_error,
+                    user_id=user_id,
+                    status=status,
+                )
 
         elif status in (500, 502, 503, 504):
             try:
                 await asyncio.sleep(1.0)
                 return await chat.send(query)
-            except Exception:
-                LOGGER.error(f"[GroqChat] Server retry failed for {user_id}")
+            except Exception as retry_error:
+                await report_error(
+                    "chatbot.retry",
+                    retry_error,
+                    user_id=user_id,
+                    status=status,
+                )
         else:
-            LOGGER.error(f"[GroqChat] API {status} for {user_id}: {e}")
+            await report_error("chatbot.api", e, user_id=user_id, status=status)
 
     except Exception as e:
-        LOGGER.error(f"[GroqChat] Exception for {user_id}: {e}")
+        await report_error("chatbot", e, user_id=user_id)
 
     return None
 

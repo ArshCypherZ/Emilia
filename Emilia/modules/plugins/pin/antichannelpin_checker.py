@@ -28,9 +28,15 @@ async def cleanlinkedChecker(client, message):
             await client.unpin_chat_message(chat_id=chat_id, message_id=message_id)
 
 
+from Emilia.utils.cache import linked_chat_cache
+
 async def GetLinkedChannel(client, chat_id: int) -> str:
+    cache_key = f"{chat_id}"
+    cached = await linked_chat_cache.get(cache_key)
+    if cached is not None:
+        return cached if cached != "None" else None
+
     chat_data = await client.get_chat(chat_id=chat_id)
-    if chat_data.linked_chat:
-        return chat_data.linked_chat.id
-    else:
-        return None
+    linked_id = chat_data.linked_chat.id if chat_data.linked_chat else "None"
+    await linked_chat_cache.set(cache_key, linked_id)
+    return chat_data.linked_chat.id if chat_data.linked_chat else None

@@ -88,11 +88,18 @@ async def del_fed(client, message):
             [
                 [
                     InlineKeyboardButton(
-                        "Delete Federation", callback_data="rmfed_{}".format(fed_id),
+                        "Delete Federation",
+                        callback_data="rmfed_{}".format(fed_id),
                         style=ButtonStyle.DANGER,
                     )
                 ],
-                [InlineKeyboardButton("Cancel", callback_data="cancel_delete", style=ButtonStyle.DEFAULT)],
+                [
+                    InlineKeyboardButton(
+                        "Cancel",
+                        callback_data="cancel_delete",
+                        style=ButtonStyle.DEFAULT,
+                    )
+                ],
             ]
         ),
     )
@@ -290,8 +297,12 @@ async def fp(client, message, sender_id: int = None, anon: bool = False):
     buttons = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Accept", callback_data=f"fp_{cb_data}", style=ButtonStyle.SUCCESS),
-                InlineKeyboardButton("Decline", callback_data=f"nofp_{cb_data}", style=ButtonStyle.DANGER),
+                InlineKeyboardButton(
+                    "Accept", callback_data=f"fp_{cb_data}", style=ButtonStyle.SUCCESS
+                ),
+                InlineKeyboardButton(
+                    "Decline", callback_data=f"nofp_{cb_data}", style=ButtonStyle.DANGER
+                ),
             ]
         ]
     )
@@ -428,8 +439,12 @@ async def ft(client, message, sender_id: int = None, anon: bool = False):
     buttons = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Accept", callback_data=f"ft_{cb_data}", style=ButtonStyle.SUCCESS),
-                InlineKeyboardButton("Decline", callback_data=f"noft_{cb_data}", style=ButtonStyle.DANGER),
+                InlineKeyboardButton(
+                    "Accept", callback_data=f"ft_{cb_data}", style=ButtonStyle.SUCCESS
+                ),
+                InlineKeyboardButton(
+                    "Decline", callback_data=f"noft_{cb_data}", style=ButtonStyle.DANGER
+                ),
             ]
         ]
     )
@@ -462,8 +477,14 @@ async def ft(client, query):
     buttons = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Confirm", callback_data=f"ftc_{cb_data}", style=ButtonStyle.SUCCESS),
-                InlineKeyboardButton("Cancel", callback_data=f"ftnoc_{cb_data}", style=ButtonStyle.DEFAULT),
+                InlineKeyboardButton(
+                    "Confirm", callback_data=f"ftc_{cb_data}", style=ButtonStyle.SUCCESS
+                ),
+                InlineKeyboardButton(
+                    "Cancel",
+                    callback_data=f"ftnoc_{cb_data}",
+                    style=ButtonStyle.DEFAULT,
+                ),
             ]
         ]
     )
@@ -784,7 +805,9 @@ async def fban(client, message, sender_id: int = None, anon: bool = False):
         )
         if reason:
             fban_global_text = fban_global_text + f"<b>Reason:</b> {reason}"
-    await message.reply_text(fban_global_text, reply_parameters=None, parse_mode=ParseMode.HTML)
+    await message.reply_text(
+        fban_global_text, reply_parameters=None, parse_mode=ParseMode.HTML
+    )
     getfednotif = await db.user_feds_report(int(owner_id))
     if getfednotif and message.chat.id != int(owner_id):
         await pgram.send_message(
@@ -809,7 +832,11 @@ async def fban(client, message, sender_id: int = None, anon: bool = False):
                 status = None
         for idx, c in enumerate(fed_chats, start=1):
             try:
-                await flood_safe(lambda c=c: pgram.ban_chat_member(int(c), user.id, revoke_messages=True))
+                await flood_safe(
+                    lambda c=c: pgram.ban_chat_member(
+                        int(c), user.id, revoke_messages=True
+                    )
+                )
             except Exception as exc:
                 LOGGER.warning(f"fban propagation failed for chat {c}: {exc}")
             # pace to stay under Telegram's global ceiling
@@ -822,12 +849,24 @@ async def fban(client, message, sender_id: int = None, anon: bool = False):
             ):
                 last_edit = asyncio.get_event_loop().time()
                 try:
-                    await status.edit_text(f"Propagating ban... {idx}/{total} chats")
+                    await status.delete()
+                except Exception:
+                    pass
+                try:
+                    status = await message.reply_text(
+                        f"Propagating ban... {idx}/{total} chats", reply_parameters=None
+                    )
                 except Exception:
                     pass
         if status:
             try:
-                await status.edit_text(f"Ban propagated to {total} chats.")
+                await status.delete()
+            except Exception:
+                pass
+            try:
+                status = await message.reply_text(
+                    f"Ban propagated to {total} chats.", reply_parameters=None
+                )
             except Exception:
                 pass
     subs = list(await db.get_fed_subs(fed_id))
@@ -844,9 +883,15 @@ async def fban(client, message, sender_id: int = None, anon: bool = False):
             all_fedschat = await db.get_all_fed_chats(fed)
             for c in all_fedschat:
                 try:
-                    await flood_safe(lambda c=c: pgram.ban_chat_member(int(c), user.id, revoke_messages=True))
+                    await flood_safe(
+                        lambda c=c: pgram.ban_chat_member(
+                            int(c), user.id, revoke_messages=True
+                        )
+                    )
                 except Exception as exc:
-                    LOGGER.warning(f"fban propagation (sub-fed {fed}) failed for chat {c}: {exc}")
+                    LOGGER.warning(
+                        f"fban propagation (sub-fed {fed}) failed for chat {c}: {exc}"
+                    )
                 await asyncio.sleep(0.1)
 
 
@@ -916,7 +961,9 @@ async def unfban(client, message, sender_id: int = None, anon: bool = False):
     if reason:
         ufb_string = ufb_string + f"\n<b>Reason:</b> {reason}"
     await db.unfban_user(fed_id, user.id)
-    await message.reply_text(ufb_string, reply_parameters=None, parse_mode=ParseMode.HTML)
+    await message.reply_text(
+        ufb_string, reply_parameters=None, parse_mode=ParseMode.HTML
+    )
     getfednotif = await db.user_feds_report(int(owner_id))
     if getfednotif and message.chat.id != int(owner_id):
         await pgram.send_message(int(owner_id), ufb_string, parse_mode=ParseMode.HTML)
@@ -1040,7 +1087,9 @@ async def check_fadmins(client, e):
             _x, _x_name, _x
         )
     await e.edit_message_reply_markup(reply_markup=None)
-    await e.message.reply_text(out_str, reply_parameters=None, parse_mode=ParseMode.HTML)
+    await e.message.reply_text(
+        out_str, reply_parameters=None, parse_mode=ParseMode.HTML
+    )
 
 
 @register(pattern="subfed")
@@ -1354,7 +1403,12 @@ async def fed_export___(client, e, sender_id: int = None, anon: bool = False):
             for fban in fbans:
                 fb = fbans[fban]
                 fban_list.append(
-                    {"Name": fb[0], "User ID": fban, "Reason": fb[2], "Time": str(fb[3])}
+                    {
+                        "Name": fb[0],
+                        "User ID": fban,
+                        "Reason": fb[2],
+                        "Time": str(fb[3]),
+                    }
                 )
             csv_headers = ["Name", "User ID", "Reason", "Time"]
 
@@ -1380,9 +1434,7 @@ async def fed_export___(client, e, sender_id: int = None, anon: bool = False):
                     "time": str(fb[3]),
                 }
                 fban_list += orjson.dumps(json_p).decode("utf-8") + "\n"
-            await asyncio.to_thread(
-                lambda: open(export_path, "w").write(fban_list)
-            )
+            await asyncio.to_thread(lambda: open(export_path, "w").write(fban_list))
             await e.reply_document(
                 export_path, caption="Fbanned users in {}.".format(fname)
             )
@@ -1391,7 +1443,12 @@ async def fed_export___(client, e, sender_id: int = None, anon: bool = False):
             for fban in fbans:
                 fb = fbans[fban]
                 fban_list.append(
-                    {"Name": fb[0], "User ID": fban, "Reason": fb[2], "Time": str(fb[3])}
+                    {
+                        "Name": fb[0],
+                        "User ID": fban,
+                        "Reason": fb[2],
+                        "Time": str(fb[3]),
+                    }
                 )
             xml_str = ""
             qp = 0
@@ -1509,7 +1566,8 @@ async def anon_fed(e, mode):
         [
             [
                 InlineKeyboardButton(
-                    "Click to prove Admin", callback_data="fedp_{}_{}".format(e.chat.id, e.id)
+                    "Click to prove Admin",
+                    callback_data="fedp_{}_{}".format(e.chat.id, e.id),
                 )
             ]
         ]
@@ -1622,6 +1680,8 @@ async def fban_welcome(client, message):
             else:
                 return
         except Exception as exc:
-            LOGGER.warning(f"fban_welcome ban_chat_member failed in {message.chat.id}: {exc}")
+            LOGGER.warning(
+                f"fban_welcome ban_chat_member failed in {message.chat.id}: {exc}"
+            )
     else:
         return

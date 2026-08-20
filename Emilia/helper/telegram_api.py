@@ -154,7 +154,7 @@ async def send_message(
     *,
     reply_to_message_id: Optional[int] = None,
     reply_markup: Optional[Dict[str, Any]] = None,
-    disable_web_page_preview: Optional[bool] = None,
+    link_preview_options: Optional[Dict[str, Any]] = None,
     parse_mode: Optional[str] = None,
 ):
     payload: Dict[str, Any] = {"chat_id": chat_id, "text": text}
@@ -162,8 +162,8 @@ async def send_message(
         payload["reply_parameters"] = {"message_id": reply_to_message_id}
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
-    if disable_web_page_preview is not None:
-        payload["link_preview_options"] = {"is_disabled": disable_web_page_preview}
+    if link_preview_options is not None:
+        payload["link_preview_options"] = link_preview_options
     if parse_mode:
         payload["parse_mode"] = parse_mode
     result = await bot_api_request("sendMessage", payload, retries=1)

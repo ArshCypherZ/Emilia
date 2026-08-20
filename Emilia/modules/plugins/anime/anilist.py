@@ -5,7 +5,7 @@ import re
 import time
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatAction, ChatMemberStatus, ChatType
+from pyrogram.enums import ButtonStyle, ChatAction, ChatMemberStatus, ChatType
 from pyrogram.errors import UserNotParticipant, WebpageCurlFailed, WebpageMediaEmpty
 from pyrogram.types import (
     CallbackQuery,
@@ -1151,7 +1151,13 @@ async def list_favourites_btn(client: Client, cq: CallbackQuery, cdata: dict):
         ]
     ]
     if q[2] == "yes":
-        btn.append([InlineKeyboardButton("Back", callback_data=f"getusrbc_{q[3]}")])
+        btn.append(
+            [
+                InlineKeyboardButton(
+                    "Back", callback_data=f"getusrbc_{q[3]}", style=ButtonStyle.PRIMARY
+                )
+            ]
+        )
     else:
         btn.append(
             [InlineKeyboardButton("Profile", url=f"https://anilist.co/user/{q[1]}")]
@@ -1366,7 +1372,9 @@ async def list_update_anilist_btn(client: Client, cq: CallbackQuery, cdata: dict
         btns.append(
             [
                 InlineKeyboardButton(
-                    "Delete", callback_data=cq.data.replace("lsupdt", f"dlt_{i}")
+                    "Delete",
+                    callback_data=cq.data.replace("lsupdt", f"dlt_{i}"),
+                    style=ButtonStyle.DANGER,
                 )
             ]
         )
@@ -1618,7 +1626,13 @@ async def additional_info_btn(client: Client, cq: CallbackQuery, cdata: dict):
             else f"page_CHARACTER{lsqry}{lspg}_{q[5]}_{user}"
         )
     )
-    button.append([InlineKeyboardButton(text="Back", callback_data=cbd)])
+    button.append(
+        [
+            InlineKeyboardButton(
+                text="Back", callback_data=cbd, style=ButtonStyle.PRIMARY
+            )
+        ]
+    )
     try:
         await cq.edit_message_media(
             InputMediaPhoto(pic, caption=msg), reply_markup=InlineKeyboardMarkup(button)
@@ -1668,7 +1682,9 @@ async def featured_in_btn(client: Client, cq: CallbackQuery, cdata: dict):
     button.append(
         [
             InlineKeyboardButton(
-                text="Back", callback_data=f"page_CHARACTER_{qry}_{pg}_{auth}_{usr}"
+                text="Back",
+                callback_data=f"page_CHARACTER_{qry}_{pg}_{auth}_{usr}",
+                style=ButtonStyle.PRIMARY,
             )
         ]
     )
@@ -1707,11 +1723,19 @@ async def featured_in_switch_btn(client: Client, cq: CallbackQuery, cdata: dict)
         if int(reqpg) == 0:
             button.append([InlineKeyboardButton(text="》", callback_data=nex)])
         elif int(reqpg) == totalpg:
-            button.append([InlineKeyboardButton(text="Back", callback_data=bac)])
+            button.append(
+                [
+                    InlineKeyboardButton(
+                        text="Back", callback_data=bac, style=ButtonStyle.PRIMARY
+                    )
+                ]
+            )
         else:
             button.append(
                 [
-                    InlineKeyboardButton(text="Back", callback_data=bac),
+                    InlineKeyboardButton(
+                        text="Back", callback_data=bac, style=ButtonStyle.PRIMARY
+                    ),
                     InlineKeyboardButton(text="》", callback_data=nex),
                 ]
             )
@@ -1725,7 +1749,9 @@ async def featured_in_switch_btn(client: Client, cq: CallbackQuery, cdata: dict)
     button.append(
         [
             InlineKeyboardButton(
-                text="Back", callback_data=f"page_CHARACTER_{qry}_{pg}_{auth}_{user}"
+                text="Back",
+                callback_data=f"page_CHARACTER_{qry}_{pg}_{auth}_{user}",
+                style=ButtonStyle.PRIMARY,
             )
         ]
     )
@@ -1824,7 +1850,13 @@ async def headlines_btn(client: Client, cq: CallbackQuery):
                     text="Auto Unpin (MAL)", callback_data=f"unpin_call_mal_{gid}"
                 ),
             ],
-            [InlineKeyboardButton(text="Back", callback_data=f"settogl_call_{gid}")],
+            [
+                InlineKeyboardButton(
+                    text="Back",
+                    callback_data=f"settogl_call_{gid}",
+                    style=ButtonStyle.PRIMARY,
+                )
+            ],
         ]
     )
     await cq.edit_message_text(headlines_text, reply_markup=btn)
@@ -1917,7 +1949,13 @@ async def auto_unpin(client: Client, cq: CallbackQuery):
     if row != []:
         btn.append(row)
     btn.append(
-        [InlineKeyboardButton(text="Back", callback_data=f"headlines_malhd_{gid}")]
+        [
+            InlineKeyboardButton(
+                text="Back",
+                callback_data=f"headlines_malhd_{gid}",
+                style=ButtonStyle.PRIMARY,
+            )
+        ]
     )
     await cq.edit_message_text(
         "Select a time for auto unpin:", reply_markup=InlineKeyboardMarkup(btn)
@@ -1957,7 +1995,15 @@ async def change_ui_btn(client: Client, cq: CallbackQuery):
             InlineKeyboardButton(text="UPPER", callback_data=f"cui_UPPER_{gid}"),
         ]
     )
-    btn.append([InlineKeyboardButton(text="Back", callback_data=f"settogl_call_{gid}")])
+    btn.append(
+        [
+            InlineKeyboardButton(
+                text="Back",
+                callback_data=f"settogl_call_{gid}",
+                style=ButtonStyle.PRIMARY,
+            )
+        ]
+    )
     if qry in ["Caps", "UPPER"]:
         if await GUI.find_one({"_id": gid}):
             await GUI.update_one({"_id": gid}, {"$set": {"cs": qry}})

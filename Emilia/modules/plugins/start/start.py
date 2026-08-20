@@ -2,14 +2,24 @@ import os
 
 from bson.objectid import ObjectId
 from pyrogram import Client
-from pyrogram.enums import ChatType
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
-from bson.objectid import ObjectId
+from pyrogram.enums import ButtonStyle, ChatType
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+)
 
-from Emilia import custom_filter, BOT_NAME, TOKEN, SUPPORT_CHAT, UPDATE_CHANNEL, START_PIC, db
-from Emilia.utils.data_parser import get_anime, get_recommendations, get_additional_info
+from Emilia import (
+    BOT_NAME,
+    START_PIC,
+    SUPPORT_CHAT,
+    TOKEN,
+    UPDATE_CHANNEL,
+    custom_filter,
+    db,
+)
+from Emilia.modules.plugins.anime.anilist import auth_link_cmd, code_cmd, logout_cmd
 from Emilia.modules.plugins.anime.bot import help_
-from Emilia.modules.plugins.anime.anilist import auth_link_cmd, logout_cmd, code_cmd
 from Emilia.modules.plugins.connection.connect import connectRedirect
 from Emilia.modules.plugins.greetings.captcha.button_captcha import (
     buttonCaptchaRedirect,
@@ -19,8 +29,14 @@ from Emilia.modules.plugins.greetings.group_onboarding import (
     onboarding_redirect,
     starter_redirect,
 )
+from Emilia.modules.plugins.requests import request_redirect
+from Emilia.modules.plugins.music.playlist.deeplink import (
+    playlist_redirect,
+    playlist_menu_redirect,
+)
 from Emilia.modules.plugins.notes.private_notes import note_redirect
 from Emilia.modules.plugins.rules.rules import rulesRedirect
+from Emilia.utils.data_parser import get_additional_info, get_anime, get_recommendations
 from Emilia.utils.decorators import *
 from Emilia.utils.helper import AUTH_USERS, get_btns
 
@@ -33,9 +49,9 @@ This bot give varieties of features such as
 ➩ Fun like chatbot
 ➩ Clone, Ranking, AI System
 ➩ Anime Loaded Modules
-➩ Inline Games
+➩ Music Player
 
-Use the buttons buttons or /help to checkout even more!
+Use the buttons or /help to checkout even more!
 """
 
 
@@ -55,7 +71,11 @@ async def build_start_message(client):
     start_pic_url = custom_start_pic if custom_start_pic else START_PIC
 
     buttons = [
-        [InlineKeyboardButton("Help", callback_data="help_back")],
+        [
+            InlineKeyboardButton(
+                "Help", callback_data="help_back", style=ButtonStyle.PRIMARY
+            )
+        ],
         [
             InlineKeyboardButton("Support", url=f"https://t.me/{SUPPORT_CHAT}"),
             InlineKeyboardButton("News", url=f"https://t.me/{UPDATE_CHANNEL}"),
@@ -96,9 +116,7 @@ async def starttt(client, message):
 
             if photo:
                 try:
-                    await message.reply_photo(
-                        photo, caption=text, reply_markup=markup
-                    )
+                    await message.reply_photo(photo, caption=text, reply_markup=markup)
                 except Exception:
                     # Bad/stale file_id or unreachable URL: fall back to text.
                     await message.reply_text(
@@ -152,6 +170,18 @@ async def starttt(client, message):
         elif startCheckQuery(message, StartQuery="rules"):
             await rulesRedirect(message, client)
 
+        # Shared playlist Redirect Implementation
+        elif startCheckQuery(message, StartQuery="pl"):
+            await playlist_redirect(client, message)
+
+        # Content Request Redirect Implementation
+        elif startCheckQuery(message, StartQuery="req"):
+            await request_redirect(client, message)
+
+        # Playlists menu deep-link (from Now Playing card "Playlists" button)
+        elif startCheckQuery(message, StartQuery="playlists"):
+            await playlist_menu_redirect(client, message)
+
         elif startCheckQuery(message, StartQuery="anihelp"):
             await help_(client, message)
 
@@ -190,7 +220,9 @@ async def starttt(client, message):
 
         elif deep_cmd_list[0] == "anirec":
             result = await get_recommendations(deep_cmd_list[1])
-            await client.send_message(user, result, link_preview_options=LinkPreviewOptions(is_disabled=True))
+            await client.send_message(
+                user, result, link_preview_options=LinkPreviewOptions(is_disabled=True)
+            )
 
         elif (message.text.split()[1]).split("_", 1)[0] == "code":
             if not os.environ.get("ANILIST_REDIRECT_URL"):
@@ -221,8 +253,10 @@ async def callback_query_handler(client, callback_query):
         )
         await callback_query.message.delete()
         return
-    if callback_query.data == "bot_clone":   
-        await callback_query.message.reply_text(help_text, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    if callback_query.data == "bot_clone":
+        await callback_query.message.reply_text(
+            help_text, link_preview_options=LinkPreviewOptions(is_disabled=True)
+        )
         await callback_query.message.delete()
         return
 

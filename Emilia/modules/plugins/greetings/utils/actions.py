@@ -11,12 +11,25 @@ from Emilia.mongo.welcome_mongo import (
 
 
 async def passedAction(client, chat_id: int, user_id: int, message_id: int):
-    if not await restrict_member_no_reactions(chat_id, user_id, can_send_messages=True):
-        await client.restrict_chat_member(
-            chat_id,
-            user_id,
-            ChatPermissions(can_send_messages=True, can_add_web_page_previews=True),
-        )
+    from pyrogram.errors import BadRequest
+    
+    try:
+        await client.approve_chat_join_request(chat_id, user_id)
+    except BadRequest:
+        pass
+    except Exception as e:
+        from Emilia import LOGGER
+        LOGGER.error(f"passedAction approve_chat_join_request failed: {e}")
+
+    try:
+        if not await restrict_member_no_reactions(chat_id, user_id, can_send_messages=True):
+            await client.restrict_chat_member(
+                chat_id,
+                user_id,
+                ChatPermissions(can_send_messages=True, can_add_web_page_previews=True),
+            )
+    except BadRequest:
+        pass
 
     if await isWelcome(chat_id):
         Content, Text, DataType = await GetWelcome(chat_id)
@@ -27,9 +40,12 @@ async def passedAction(client, chat_id: int, user_id: int, message_id: int):
     else:
         reply_markup = None
 
-    await client.edit_message_reply_markup(
-        chat_id=chat_id, message_id=message_id, reply_markup=reply_markup
-    )
+    try:
+        await client.edit_message_reply_markup(
+            chat_id=chat_id, message_id=message_id, reply_markup=reply_markup
+        )
+    except Exception:
+        pass
 
     await DeleteUsercaptchaData(chat_id, user_id)
     await AppendVerifiedUsers(chat_id, user_id)

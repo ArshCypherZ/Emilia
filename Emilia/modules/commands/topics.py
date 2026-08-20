@@ -1,6 +1,6 @@
 # DONE: Topics
 
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import Emilia.strings as strings
@@ -159,7 +159,9 @@ async def _topic_action_command(client, message, action: str, register_result: s
     return register_result, None, None
 
 
-@usage("/deletetopic [topic id]\nTip: run inside the topic, or omit the id to pick from a list")
+@usage(
+    "/deletetopic [topic id]\nTip: run inside the topic, or omit the id to pick from a list"
+)
 @example("/deletetopic 1234567890")
 @description(
     "Delete a topic. Run inside the topic to auto-detect it, or omit the id to choose from a button list. Doesn't work on the General topic."
@@ -172,7 +174,9 @@ async def delete_topic(client, message):
     return await _topic_action_command(client, message, "delete", "DELETE_TOPIC")
 
 
-@usage("/closetopic [topic id]\nTip: run inside the topic, or omit the id to pick from a list")
+@usage(
+    "/closetopic [topic id]\nTip: run inside the topic, or omit the id to pick from a list"
+)
 @example("/closetopic 1234567890")
 @description(
     "Close a topic. Run inside the topic to auto-detect it, or omit the id to choose from a button list. Doesn't work on the General topic."
@@ -254,9 +258,7 @@ async def rename_topic(client, message):
             # Let them pick the topic from a list, then rename via a
             # follow-up reply instead of requiring a manual id lookup.
             topics = [
-                t
-                async for t in client.get_forum_topics(message.chat.id)
-                if t.id != 1
+                t async for t in client.get_forum_topics(message.chat.id) if t.id != 1
             ]
             if not topics:
                 return await message.reply_text("No topics found to rename.")
@@ -344,8 +346,16 @@ async def list_topics(client, message):
     buttons = [
         [
             InlineKeyboardButton(f"{t.title}"[:40], callback_data=f"topicnoop:{t.id}"),
-            InlineKeyboardButton("Close", callback_data=f"topicact:close:{t.id}"),
-            InlineKeyboardButton("Delete", callback_data=f"topicact:delete:{t.id}"),
+            InlineKeyboardButton(
+                "Close",
+                callback_data=f"topicact:close:{t.id}",
+                style=ButtonStyle.PRIMARY,
+            ),
+            InlineKeyboardButton(
+                "Delete",
+                callback_data=f"topicact:delete:{t.id}",
+                style=ButtonStyle.DANGER,
+            ),
         ]
         for t in open_topics
     ]

@@ -3,8 +3,9 @@
 import random
 import re
 
-from Emilia.custom_filter import listen
 from pyrogram.types import LinkPreviewOptions
+
+from Emilia.custom_filter import listen
 
 OWO = [
     "Emilia is always here for my Senpai >w<",
@@ -88,4 +89,6 @@ async def Emi_(client, message):
     if getattr(client, "is_clone", False):
         return
     uwu = random.choice(OWO)
-    await message.reply_text(uwu, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    await message.reply_text(
+        uwu, link_preview_options=LinkPreviewOptions(is_disabled=True)
+    )

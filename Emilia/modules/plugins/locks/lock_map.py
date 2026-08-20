@@ -42,3 +42,6 @@ class LocksMap(ExtendedEnum):
     outsidereaction = auto()
     guestbot = auto()
     emojicustom = auto()
+    spoiler = auto()
+    format = auto()
+    code = auto()

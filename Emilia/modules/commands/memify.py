@@ -25,9 +25,9 @@ async def handler(client, message):
         return await usage_string(message, handler)
     reply_message = message.reply_to_message
     if not reply_message.media:
-        return await message.reply_text("```Reply to a image/sticker.```")
+        return await message.reply_text("`Reply to a image/sticker.`")
     file = await reply_message.download(in_memory=False)
-    msg = await message.reply_text("```Memifying this image!```")
+    msg = await message.reply_text("`Memifying this image!`")
     parts = (message.text or "").split(None, 1)
     text = parts[1] if len(parts) > 1 else ""
     if len(text) < 1:

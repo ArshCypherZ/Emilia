@@ -23,8 +23,6 @@ async def logcategories(client, message):
         channel_title = await get_set_channel(chat_id)
         await message.reply(
             f"I am currently logging admin actions in '{html.escape(channel_title)}'.",
-            )
-    else:
-        await message.reply(
-            "There are no log channels assigned to this chat."
         )
+    else:
+        await message.reply("There are no log channels assigned to this chat.")

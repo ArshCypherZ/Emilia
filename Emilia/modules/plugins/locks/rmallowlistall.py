@@ -1,6 +1,7 @@
 import html
 
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import custom_filter
@@ -19,10 +20,18 @@ async def rmallowlistall(client, message):
     keyboard = InlineKeyboardMarkup(
         [
             InlineKeyboardButton(
-                text="Delete allowlist", callback_data=f"allowlist_confirm"
+                text="Delete allowlist",
+                callback_data=f"allowlist_confirm",
+                style=ButtonStyle.DANGER,
             )
         ],
-        [InlineKeyboardButton(text="Cancel", callback_data=f"allowlist_cancel")],
+        [
+            InlineKeyboardButton(
+                text="Cancel",
+                callback_data=f"allowlist_cancel",
+                style=ButtonStyle.DANGER,
+            )
+        ],
     )
 
     await message.reply(

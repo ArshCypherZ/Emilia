@@ -2,7 +2,13 @@ import asyncio
 import os
 import time
 
-from pyrogram.enums import ChatMembersFilter, ChatMemberStatus, ChatType, ParseMode, UserStatus
+from pyrogram.enums import (
+    ChatMembersFilter,
+    ChatMemberStatus,
+    ChatType,
+    ParseMode,
+    UserStatus,
+)
 from pyrogram.errors import (
     ChatAdminRequired,
     FloodWait,
@@ -22,12 +28,12 @@ from Emilia.helper.admins import *
 from Emilia.helper.get_data import GetChat
 from Emilia.modules.commands.bans import ban, kick, unban
 from Emilia.modules.plugins.connection.connection import connection
-from Emilia.utils.cache import SimpleCache
 
 # check() re-invokes the original ban/kick/mute handlers after an anonymous
 # admin is verified; those handlers live in their own modules, not here.
 from Emilia.modules.plugins.mute.mute import mute
 from Emilia.modules.plugins.mute.unmute import ban as unmute
+from Emilia.utils.cache import SimpleCache
 from Emilia.utils.decorators import *
 from Emilia.utils.decorators import _invalidate_admin_caches
 
@@ -118,7 +124,9 @@ async def promote(client, promt):
     )
 
     await meow.promote_chat_member(chat_id, users.id, privileges=new_rights)
-    await meow.set_administrator_title(chat_id, users.id, _clamp_title(title) if title else "Admin")
+    await meow.set_administrator_title(
+        chat_id, users.id, _clamp_title(title) if title else "Admin"
+    )
     await _invalidate_admin_caches(chat_id, users.id)
     await _adminlist_cache.delete(f"list:{chat_id}")
     await update_admin_cache(chat_id, users.id, True)
@@ -171,7 +179,9 @@ async def fpromote(client, promt):
         can_manage_video_chats=True,
     )
     await meow.promote_chat_member(chat_id, users.id, privileges=new_rights)
-    await meow.set_administrator_title(chat_id, users.id, _clamp_title(title) if title else "Admin")
+    await meow.set_administrator_title(
+        chat_id, users.id, _clamp_title(title) if title else "Admin"
+    )
     await _invalidate_admin_caches(chat_id, users.id)
     await _adminlist_cache.delete(f"list:{chat_id}")
     await update_admin_cache(chat_id, users.id, True)
@@ -257,9 +267,15 @@ async def demote(client, dmod):
     # Only group owner (or dev users) can demote an admin with
     # can_promote_members; regular admins shouldn't demote each other.
     target_member = await meow.get_chat_member(chat_id, users.id)
-    if target_member.status == ChatMemberStatus.ADMINISTRATOR and target_member.privileges.can_promote_members:
+    if (
+        target_member.status == ChatMemberStatus.ADMINISTRATOR
+        and target_member.privileges.can_promote_members
+    ):
         caller_member = await meow.get_chat_member(chat_id, _sender_id(dmod))
-        if caller_member.status != ChatMemberStatus.OWNER and _sender_id(dmod) not in DEV_USERS:
+        if (
+            caller_member.status != ChatMemberStatus.OWNER
+            and _sender_id(dmod) not in DEV_USERS
+        ):
             return await dmod.reply_text(
                 "Only the group owner can demote a full admin."
             )
@@ -534,7 +550,9 @@ async def _(client, event):
             LOGGER.warning("sleeping for {} seconds".format(ex.value))
             await asyncio.sleep(ex.value)
         except Exception as ex:
-            LOGGER.warning(f"unbanall: failed to unban {i.user.id} in {event.chat.id}: {ex}")
+            LOGGER.warning(
+                f"unbanall: failed to unban {i.user.id} in {event.chat.id}: {ex}"
+            )
         else:
             p += 1
     if p == 0:
@@ -569,7 +587,9 @@ async def _(client, event):
             LOGGER.warning("sleeping for {} seconds".format(ex.value))
             await asyncio.sleep(ex.value)
         except Exception as ex:
-            LOGGER.warning(f"unmuteall: failed to unmute {i.user.id} in {event.chat.id}: {ex}")
+            LOGGER.warning(
+                f"unmuteall: failed to unmute {i.user.id} in {event.chat.id}: {ex}"
+            )
         else:
             p += 1
     if p == 0:
@@ -813,7 +833,6 @@ async def delete_messages(client, event):
     await client.delete_messages(event.chat.id, [message.id, event.id])
 
 
-
 VALID_SLOWMODE_SECONDS = {0, 5, 10, 30, 60, 300, 900, 3600}
 
 
@@ -837,7 +856,9 @@ async def slow_mode(client, message):
         chat = await meow.get_chat(message.chat.id)
         current = getattr(chat, "slow_mode_delay", None) or 0
         return await message.reply_text(
-            f"Current slow mode: **{current}s**" if current else "Slow mode is currently **off**."
+            f"Current slow mode: **{current}s**"
+            if current
+            else "Slow mode is currently **off**."
         )
 
     try:

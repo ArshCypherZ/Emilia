@@ -2,9 +2,14 @@ import asyncio
 from typing import Dict, Iterable, Optional, Tuple
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatMemberStatus, ChatType
+from pyrogram.enums import ButtonStyle, ChatMemberStatus, ChatType
 from pyrogram.errors import MessageNotModified
-from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
+from pyrogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+)
 
 from Emilia import BOT_ID, BOT_NAME, BOT_USERNAME, SUPPORT_CHAT, UPDATE_CHANNEL, db
 from Emilia.helper.get_data import GetChat
@@ -190,13 +195,16 @@ def _group_keyboard(chat_id: int, has_rules: bool) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     "Rules",
                     url=f"https://t.me/{BOT_USERNAME}?start=rules_{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 ),
             ]
         )
 
     rows.append(
         [
-            InlineKeyboardButton("Pin Guide", callback_data="grpguide:pin"),
+            InlineKeyboardButton(
+                "Pin Guide", callback_data="grpguide:pin", style=ButtonStyle.PRIMARY
+            ),
             InlineKeyboardButton("Hide in 1h", callback_data="grpguide:hide"),
         ]
     )
@@ -418,7 +426,9 @@ def _setup_home_keyboard(chat_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    "Welcome & Rules", callback_data=f"onbpm:welcome:{chat_id}"
+                    "Welcome & Rules",
+                    callback_data=f"onbpm:welcome:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 ),
                 InlineKeyboardButton(
                     "Protection", callback_data=f"onbpm:protection:{chat_id}"
@@ -509,7 +519,9 @@ async def _render_permissions(
             ],
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -551,7 +563,9 @@ async def _render_presets(
             ],
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -585,11 +599,18 @@ async def _render_welcome_rules(
                 InlineKeyboardButton(
                     "Open Rules",
                     url=f"https://t.me/{BOT_USERNAME}?start=rules_{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         )
     rows.append(
-        [InlineKeyboardButton("Back to Setup", callback_data=f"onbpm:home:{chat_id}")]
+        [
+            InlineKeyboardButton(
+                "Back to Setup",
+                callback_data=f"onbpm:home:{chat_id}",
+                style=ButtonStyle.PRIMARY,
+            )
+        ]
     )
 
     text = (
@@ -667,7 +688,9 @@ async def _render_protection(
             ],
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -696,7 +719,9 @@ async def _render_logs(
             [InlineKeyboardButton("Refresh", callback_data=f"onbpm:logs:{chat_id}")],
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -738,7 +763,9 @@ async def _render_extras(
             ],
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -769,7 +796,9 @@ async def _render_summary(
         [
             [
                 InlineKeyboardButton(
-                    "Back to Setup", callback_data=f"onbpm:home:{chat_id}"
+                    "Back to Setup",
+                    callback_data=f"onbpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -823,6 +852,7 @@ async def _render_starter_home(client: Client, chat_id: int):
                 InlineKeyboardButton(
                     "Rules",
                     url=f"https://t.me/{BOT_USERNAME}?start=rules_{chat_id}",
+                    style=ButtonStyle.PRIMARY,
                 )
             ]
         )
@@ -831,7 +861,15 @@ async def _render_starter_home(client: Client, chat_id: int):
 
 def _starter_back(chat_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Back", callback_data=f"starterpm:home:{chat_id}")]]
+        [
+            [
+                InlineKeyboardButton(
+                    "Back",
+                    callback_data=f"starterpm:home:{chat_id}",
+                    style=ButtonStyle.PRIMARY,
+                )
+            ]
+        ]
     )
 
 
@@ -938,17 +976,27 @@ async def onboarding_redirect(client: Client, message, chat_id: int):
         client, message.from_user.id, chat_id
     )
     if not ok:
-        await message.reply_text(reason, link_preview_options=LinkPreviewOptions(is_disabled=True))
+        await message.reply_text(
+            reason, link_preview_options=LinkPreviewOptions(is_disabled=True)
+        )
         return
 
     await connectDB(message.from_user.id, chat_id)
     text, keyboard = await _render_setup_home(client, chat_id)
-    await message.reply_text(text, reply_markup=keyboard, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    await message.reply_text(
+        text,
+        reply_markup=keyboard,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
 
 
 async def starter_redirect(client: Client, message, chat_id: int):
     text, keyboard = await _render_starter_home(client, chat_id)
-    await message.reply_text(text, reply_markup=keyboard, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    await message.reply_text(
+        text,
+        reply_markup=keyboard,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
 
 
 @Client.on_callback_query(filters.regex(r"^grpguide:"))

@@ -6,7 +6,12 @@ from datetime import datetime
 from pyrogram import filters as pyrofilters
 from pyrogram.enums import ChatType, ParseMode
 from pyrogram.errors import MessageDeleteForbidden
-from pyrogram.types import Chat, InlineKeyboardButton, InlineKeyboardMarkup, ReplyParameters
+from pyrogram.types import (
+    Chat,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyParameters,
+)
 
 import Emilia.strings as strings
 from Emilia import db as xdb
@@ -38,6 +43,7 @@ async def _linked_chat_id(chat_id):
 @exception
 @log_to_channel
 async def excecute_operation(
+    client,
     event,
     user_id,
     name,
@@ -53,15 +59,21 @@ async def excecute_operation(
         reply_to = event.reply_to_message_id or event.id
     r = ""
     if reason:
-        r = f"\n<b>Reason</b>: <code>{reason}</code>"
+        # Use expandable blockquote for the reason
+        r = f"\n\n<blockquote expandable>{reason}</blockquote>"
     if name:
         name = ((name).replace("<", "&lt;")).replace(">", "&gt;")
+        
+    actor_html = f"<a href='tg://user?id={actor_id}'>{actor}</a>"
+    target_html = f"<a href='tg://user?id={user_id}'>{name}</a>"
+    
     # message.chat no longer carries the bot's admin rights; fetch them
     me = await pgram.get_chat_member(event.chat.id, "me")
     if me.privileges:
         if not me.privileges.can_restrict_members:
             return await event.reply_text(strings.botban)
-    if mode == "ban":
+            
+    if mode in ["ban", "dban"]:
         await pgram.ban_chat_member(event.chat.id, int(user_id))
 
         if cb:
@@ -69,12 +81,13 @@ async def excecute_operation(
             reply_to = None
         await pgram.send_message(
             event.chat.id,
-            f'<b>Banned</b> <a href="tg://user?id={user_id}">{name}</a></b>.{r}',
+            f"Yep! {target_html} has been banned by {actor_html}!{r}",
             parse_mode=ParseMode.HTML,
             reply_parameters=ReplyParameters(message_id=reply_to) if reply_to else None,
         )
         return "BAN", user_id, name
-    elif mode == "kick":
+        
+    elif mode in ["kick", "dkick"]:
         await pgram.ban_chat_member(event.chat.id, int(user_id))
         await pgram.unban_chat_member(event.chat.id, int(user_id))
 
@@ -83,11 +96,12 @@ async def excecute_operation(
             reply_to = None
         await pgram.send_message(
             event.chat.id,
-            f'<b>Kicked</b> <a href="tg://user?id={user_id}">{name}</a></b>.{r}',
+            f"Yep! {target_html} has been kicked by {actor_html}!{r}",
             parse_mode=ParseMode.HTML,
             reply_parameters=ReplyParameters(message_id=reply_to) if reply_to else None,
         )
         return "KICK", user_id, name
+        
     elif mode == "tban":
         if cb:
             await event.delete()
@@ -97,9 +111,10 @@ async def excecute_operation(
             int(user_id),
             until_date=datetime.fromtimestamp(time.time() + int(tt)),
         )
+        duration_text = await get_time(int(tt))
         await pgram.send_message(
             event.chat.id,
-            f'<b>Banned</b> <a href="tg://user?id={user_id}">{name}</a> for {(await get_time(int(tt)))}!{r}',
+            f"Yep! {target_html} has been temporarily banned for {duration_text} by {actor_html}!{r}",
             parse_mode=ParseMode.HTML,
             reply_parameters=ReplyParameters(message_id=reply_to) if reply_to else None,
         )
@@ -113,9 +128,7 @@ async def excecute_operation(
 
         await pgram.send_message(
             event.chat.id,
-            "Yep! <b><a href='tg://user?id={}'>{}</a></b> can join again!\n<b>Unbanned by:</b> <a href='tg://user?id={}'>{}</a>".format(
-                user_id, name, actor_id, actor
-            ),
+            f"Yep! {target_html} can join the group again! They were unbanned by {actor_html}.",
             reply_parameters=ReplyParameters(message_id=reply_to) if reply_to else None,
             parse_mode=ParseMode.HTML,
         )
@@ -179,6 +192,7 @@ async def dban(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -228,6 +242,7 @@ async def ban(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -273,6 +288,7 @@ async def ban(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -323,6 +339,7 @@ async def unban(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -386,6 +403,7 @@ async def dkick(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -435,6 +453,7 @@ async def kick(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -480,6 +499,7 @@ async def skick(client, event):
     if await is_admin(event, user.id):
         return await event.reply_text(strings.ON_ADMIN)
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -542,6 +562,7 @@ async def tban(client, event):
         )
     ban_time = int(await extract_time(event, reason))
     await excecute_operation(
+        client,
         event,
         user.id,
         f,
@@ -631,6 +652,7 @@ async def rules_anon(client, e):
         mute_time = await extract_time(e.message, reason)
     # pass the callback's message as the event; cb=True deletes it
     await excecute_operation(
+        client,
         e.message,
         user_id,
         fname,

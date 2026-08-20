@@ -27,6 +27,8 @@ async def anime_quote(anime):
         return None, None, None
 
 
+from pyrogram.enums import ParseMode
+
 @register(pattern="quote", disable=True)
 @disable
 async def quotes(client, message):
@@ -38,22 +40,22 @@ async def quotes(client, message):
     if not quote:
         await message.reply_text("No quote found!")
         return
-    msg = f"__❝ {quote}❞__\n\n**{character} from {anime}**"
+    msg = f"<blockquote>{quote}</blockquote>\n— <b>{character}</b> (<i>{anime}</i>)"
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("Change 🔁", callback_data="change_quote")]]
     )
-    await message.reply_text(msg, reply_markup=keyboard)
+    await message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 @callbackquery(pattern=r"change_.*")
 @callbackquery(pattern=r"quote_.*")
 async def change_quote(client, query):
     quote, character, anime = await anime_quote(anime=None)
-    msg = f"__❝ {quote}❞__\n\n**{character} from {anime}**"
+    msg = f"<blockquote>{quote}</blockquote>\n— <b>{character}</b> (<i>{anime}</i>)"
     keyboard = InlineKeyboardMarkup(
         [[InlineKeyboardButton("Change 🔁", callback_data="quote_change")]]
     )
-    await query.edit_message_text(msg, reply_markup=keyboard)
+    await query.edit_message_text(msg, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 @register(pattern="animequotes", disable=True)

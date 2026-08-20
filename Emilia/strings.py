@@ -53,9 +53,19 @@ invalid = "Invalid username/id given."
 media = "Reply with some media/photo to perform this command."
 imedia = "Invalid file/media provided"
 
+# requests
+REQ_NO_QUERY = "Please provide the name of the content you want to search or request.\nExample: `/req Interstellar`"
+REQ_CHANNEL_NOT_SET = "No request channel is configured to queue requests."
+REQ_DISABLED = "The content request system is currently disabled in this chat."
+REQ_NOT_CONFIGURED = "> **Not Configured**\n• Admins must configure search channels via `/addchannel <id>` and request channel via `/setreq <id>`."
+REQ_LIMIT_EXCEEDED = "> **Daily Request Limit Reached**\n• You have reached your limit of **{}** requests for today in this chat."
+REQ_ADMIN_ONLY = "You must be an administrator to perform this command."
+
+
 
 # exceptions
 error_messages = {
+    errors.ChatSendPlainForbidden: "I don't have permission to send text messages in this chat.",
     errors.ChatAdminRequired: "You need to make me an admin with appropriate rights so that I can perform this command!",
     errors.AdminsTooMuch: "Already too many admins.",
     errors.AdminRankInvalid: "Title too large or invalid title provided.",

@@ -1,6 +1,7 @@
 import html
 
 from pyrogram import Client, enums, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 import Emilia.strings as strings
@@ -42,17 +43,25 @@ async def removeblocklistall(client, message):
         [
             [
                 InlineKeyboardButton(
-                    text="Delete blocklist", callback_data="blocklist_confirm"
+                    text="Delete blocklist",
+                    callback_data="blocklist_confirm",
+                    style=ButtonStyle.DANGER,
                 )
             ],
-            [InlineKeyboardButton(text="Cancel", callback_data="blocklist_cancel")],
+            [
+                InlineKeyboardButton(
+                    text="Cancel",
+                    callback_data="blocklist_cancel",
+                    style=ButtonStyle.PRIMARY,
+                )
+            ],
         ]
     )
 
     await message.reply(
         text=f"Are you sure you would like to stop **ALL** of the blocklist in {html.escape(chat_title)}? This action cannot be undone.",
         reply_markup=button,
-        )
+    )
 
 
 @Client.on_callback_query(

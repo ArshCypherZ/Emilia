@@ -30,4 +30,4 @@ async def unset_log(client, message):
 
     await message.reply(
         "Successfully unset log channel. Admin actions will no longer be logged.",
-        )
+    )

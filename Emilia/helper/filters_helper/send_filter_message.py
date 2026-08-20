@@ -48,7 +48,7 @@ async def SendFilterMessage(
                 text=text,
                 reply_markup=buttons_to_bot_api_markup(buttons),
                 reply_to_message_id=message_id,
-                disable_web_page_preview=preview,
+                link_preview_options={"is_disabled": preview},
             )
             return
         try:

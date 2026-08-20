@@ -32,7 +32,7 @@ async def Notes(client, message):
             NoteHeader += NoteName
         await message.reply(
             f"{NoteHeader}\nYou can retrieve these notes by using `/get notename`, or `#notename`",
-            )
+        )
 
     else:
         await message.reply(f"No notes in {chat_title}.")

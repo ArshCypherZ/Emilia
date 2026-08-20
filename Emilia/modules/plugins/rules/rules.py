@@ -35,7 +35,7 @@ async def rules(client, message):
     if rules_text is None:
         return await message.reply(
             "This chat doesn't seem to have had any rules set yet... I wouldn't take that as an invitation though.",
-            )
+        )
 
     if not (await get_private_note(chat_id)):
         rules_text, buttons = button_markdown_parser(rules_text)
@@ -57,7 +57,7 @@ async def rules(client, message):
         await message.reply(
             (f"The rules for `{html.escape(chat_title)}` are:\n\n" f"{rules_text}"),
             reply_markup=button_markdown,
-            )
+        )
     else:
         button_text = await get_rules_button(chat_id)
         button = [
@@ -72,7 +72,7 @@ async def rules(client, message):
         await message.reply(
             "Click on the button to see the chat rules!",
             reply_markup=InlineKeyboardMarkup(button),
-            )
+        )
 
 
 async def rulesRedirect(message, client):
@@ -98,4 +98,4 @@ async def rulesRedirect(message, client):
     await message.reply(
         (f"The rules for `{html.escape(chat_title)}` are:\n\n" f"{rules_text}"),
         reply_markup=button_markdown,
-        )
+    )

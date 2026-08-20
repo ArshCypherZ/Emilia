@@ -3,7 +3,11 @@ import urllib.parse
 
 from bs4 import BeautifulSoup
 from pyrogram import Client
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, LinkPreviewOptions
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+)
 
 from Emilia import custom_filter
 from Emilia.helper.disable import disable
@@ -81,7 +85,7 @@ async def google_search_cmd(client: Client, message):
         await wait_msg.edit_text(
             response_text,
             reply_markup=keyboard,
-            link_preview_options=LinkPreviewOptions(is_disabled=True)
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
     except Exception as e:

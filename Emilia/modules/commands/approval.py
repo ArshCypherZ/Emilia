@@ -1,6 +1,6 @@
 # DONE: Approval
 
-from pyrogram.enums import ChatType, ParseMode
+from pyrogram.enums import ButtonStyle, ChatType, ParseMode
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyParameters
 
 import Emilia.strings as strings
@@ -163,8 +163,18 @@ async def unapprove_all(client, message):
         c_text = f"Are you sure you would like to unapprove **ALL** users in {title}? This action cannot be undone."
         buttons = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("Unapprove all users", callback_data="un_ap")],
-                [InlineKeyboardButton("Cancel", callback_data="c_un_ap")],
+                [
+                    InlineKeyboardButton(
+                        "Unapprove all users",
+                        callback_data="un_ap",
+                        style=ButtonStyle.DANGER,
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "Cancel", callback_data="c_un_ap", style=ButtonStyle.PRIMARY
+                    )
+                ],
             ]
         )
         await message.reply_text(c_text, reply_markup=buttons)
@@ -255,8 +265,18 @@ async def _(client, query):
         c_text = f"Are you sure you would like to unapprove **ALL** users in {title}? This action cannot be undone."
         buttons = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton("Unapprove all users", callback_data="un_ap")],
-                [InlineKeyboardButton("Cancel", callback_data="c_un_ap")],
+                [
+                    InlineKeyboardButton(
+                        "Unapprove all users",
+                        callback_data="un_ap",
+                        style=ButtonStyle.DANGER,
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "Cancel", callback_data="c_un_ap", style=ButtonStyle.PRIMARY
+                    )
+                ],
             ]
         )
         await query.edit_message_text(c_text, reply_markup=buttons)

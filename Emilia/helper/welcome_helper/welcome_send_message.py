@@ -39,7 +39,7 @@ async def SendWelcomeMessage(
                     chat_id=chat_id,
                     text=text,
                     reply_markup=buttons_to_bot_api_markup(buttons),
-                    disable_web_page_preview=preview,
+                    link_preview_options={"is_disabled": preview},
                 )
         SentMessage = await client.send_message(
             chat_id=chat_id,

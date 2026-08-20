@@ -1,5 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import (
     CallbackQuery,
     ChatPermissions,
@@ -43,7 +44,9 @@ OPEN_CHAT = ChatPermissions(
 buttons = InlineKeyboardMarkup(
     [
         [
-            InlineKeyboardButton("Enable Nightmode", callback_data="add_night"),
+            InlineKeyboardButton(
+                "Enable Nightmode", callback_data="add_night", style=ButtonStyle.SUCCESS
+            ),
             InlineKeyboardButton("Disable Nightmode", callback_data="rm_night"),
         ]
     ]

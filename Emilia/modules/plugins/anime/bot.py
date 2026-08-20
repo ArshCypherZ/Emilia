@@ -9,7 +9,7 @@ from datetime import datetime
 
 from natsort import natsorted
 from pyrogram import Client, enums, filters
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.enums import ButtonStyle, ChatMemberStatus
 from pyrogram.errors import ChannelInvalid as ci
 from pyrogram.errors import ChannelPrivate as cp
 from pyrogram.errors import FloodWait as fw
@@ -262,7 +262,9 @@ async def help_(client: Client, message: Message, mdata: dict):
                 [
                     [
                         InlineKeyboardButton(
-                            "Help", url=f"https://t.me/{bot_us}/?start=anihelp"
+                            "Help",
+                            url=f"https://t.me/{bot_us}/?start=anihelp",
+                            style=ButtonStyle.PRIMARY,
                         )
                     ]
                 ]
@@ -303,6 +305,7 @@ Apart from above shown cmds""",
                             InlineKeyboardButton(
                                 "Help",
                                 url=f"https://t.me/{BOT_USERNAME}/?start=anihelp",
+                                style=ButtonStyle.PRIMARY,
                             )
                         ]
                     ]
@@ -405,7 +408,13 @@ async def help_dicc_parser(client: Client, cq: CallbackQuery, cdata: dict):
     kek, qry, user = cdata["data"].split("_")
     text = HELP_DICT[qry]
     btn = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Back", callback_data=f"hlplist_{user}")]]
+        [
+            [
+                InlineKeyboardButton(
+                    "Back", callback_data=f"hlplist_{user}", style=ButtonStyle.PRIMARY
+                )
+            ]
+        ]
     )
     await cq.edit_message_text(text=text, reply_markup=btn)
 

@@ -3,6 +3,7 @@ import random
 
 from captcha.image import ImageCaptcha
 from pyrogram import Client, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import BOT_USERNAME
@@ -67,7 +68,7 @@ async def textCaptchaRedirect(client, message):
                 if await isUserVerified(new_chat_id, new_user_id):
                     await message.reply(
                         "You already passed the CAPTCHA, You don't need to verify yourself again.",
-                        )
+                    )
                     return
 
             # Admins captcha message
@@ -84,63 +85,7 @@ async def textCaptchaRedirect(client, message):
                 return
 
             # Captcha generating
-            if _match == "text":
-                CaptchaStringList = RandomStringGen()
-                CaptchaString = random.choice(CaptchaStringList)
-
-            elif _match == "math":
-                answer_dict, CaptchaStringList = mathCaptchaGen()
-                CaptchaString = (
-                    f"{answer_dict.get('num01')} + {answer_dict.get('num02')} = ?"
-                )
-
-            CaptchaLoc = f"Emilia/modules/plugins/greetings/captcha/CaptchaDump/EmiliaCaptcha_text_{new_user_id}_{new_chat_id}.png"
-            image = ImageCaptcha(
-                width=270, height=90, fonts=["path/font_03.ttf"], font_sizes=(50, 50)
-            )
-            image.generate(CaptchaString)
-            image.write(CaptchaString, CaptchaLoc)
-
-            chance = await GetChance(new_chat_id, new_user_id)
-
-            if chance is None:
-                chance = 0
-
-            if chance >= 3:
-                (
-                    message_id,
-                    correct_captcha,
-                    chances,
-                    captcha_list,
-                ) = await GetUserCaptchaMessageIDs(
-                    chat_id=new_chat_id, user_id=new_user_id
-                )
-                await failedAction(
-                    client,
-                    message=message,
-                    user_id=new_user_id,
-                    chat_id=new_chat_id,
-                    message_id=message_id,
-                )
-                await message.reply("You have lost your'll 3 CAPTCHA's chances")
-                return
-
-            if _match == "math":
-                CaptchaString = answer_dict.get("answer")
-
-            await SetCaptchaTextandChances(
-                new_chat_id, new_user_id, str(CaptchaString), chance, CaptchaStringList
-            )
-            keyboard = ButtonGen(CaptchaStringList, new_chat_id)
-
-            await client.send_photo(
-                chat_id=new_user_id,
-                photo=CaptchaLoc,
-                caption=CAPTCHA_START_STRINGS[chance],
-                reply_markup=InlineKeyboardMarkup(keyboard),
-            )
-            os.remove(CaptchaLoc)
-
+            await dispatch_text_math_captcha(client, new_user_id, new_chat_id, _match, message)
         else:
             # Admins captcha message
             if await isUserAdmin(
@@ -229,6 +174,7 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
                         InlineKeyboardButton(
                             text="Go Back to the chat",
                             url=f"http://t.me/c/{str_chat_id}/{message_id}",
+                            style=ButtonStyle.PRIMARY,
                         )
                     ]
                 ]
@@ -246,3 +192,65 @@ async def textCaptchaCallBack(client: Client, callback_query: CallbackQuery):
             await passedAction(
                 client, chat_id=chat_id, user_id=user_id, message_id=message_id
             )
+
+
+async def dispatch_text_math_captcha(client, user_id, chat_id, mode, message=None, caption=None):
+    if mode == "text":
+        CaptchaStringList = RandomStringGen()
+        CaptchaString = random.choice(CaptchaStringList)
+
+    elif mode == "math":
+        answer_dict, CaptchaStringList = mathCaptchaGen()
+        CaptchaString = (
+            f"{answer_dict.get('num01')} + {answer_dict.get('num02')} = ?"
+        )
+
+    CaptchaLoc = f"Emilia/modules/plugins/greetings/captcha/CaptchaDump/EmiliaCaptcha_text_{user_id}_{chat_id}.png"
+    image = ImageCaptcha(
+        width=270, height=90, fonts=["path/font_03.ttf"], font_sizes=(50, 50)
+    )
+    image.generate(CaptchaString)
+    image.write(CaptchaString, CaptchaLoc)
+
+    chance = await GetChance(chat_id, user_id)
+
+    if chance is None:
+        chance = 0
+
+    if chance >= 3:
+        (
+            message_id,
+            correct_captcha,
+            chances,
+            captcha_list,
+        ) = await GetUserCaptchaMessageIDs(
+            chat_id=chat_id, user_id=user_id
+        )
+        if message:
+            await failedAction(
+                client,
+                message=message,
+                user_id=user_id,
+                chat_id=chat_id,
+                message_id=message_id,
+            )
+            await message.reply("You have lost your'll 3 CAPTCHA's chances")
+        return
+
+    if mode == "math":
+        CaptchaString = answer_dict.get("answer")
+
+    await SetCaptchaTextandChances(
+        chat_id, user_id, str(CaptchaString), chance, CaptchaStringList
+    )
+    keyboard = ButtonGen(CaptchaStringList, chat_id)
+    
+    final_caption = caption if caption else CAPTCHA_START_STRINGS[chance]
+
+    await client.send_photo(
+        chat_id=user_id,
+        photo=CaptchaLoc,
+        caption=final_caption,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    os.remove(CaptchaLoc)

@@ -2,9 +2,13 @@ import html
 import re
 
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.errors import BadRequest
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+)
 
 from Emilia import BOT_USERNAME, LOGGER, custom_filter
 from Emilia.data import HELPABLE, SUB_MODE
@@ -12,10 +16,16 @@ from Emilia.helper.disable import disable
 from Emilia.helper.pagination_buttons import paginate_modules
 from Emilia.utils.decorators import *
 
-HELP_TEXT = """
-**Main** commands available:
-• /help: PM's you this message.
-• /help `module name`: PM's you info about that module.
+def format_help_text(text: str) -> str:
+    escaped_text = html.escape(text)
+    return re.sub(r'^&gt;\s+(.*)', r'<blockquote>\1</blockquote>', escaped_text, flags=re.MULTILINE)
+
+HELP_TEXT = """**Help Index**
+
+Select a category below to explore specific modules.
+
+`•` `/help` — Display this index.
+`•` `/help [module]` — View details for a module.
 """
 
 
@@ -23,7 +33,12 @@ async def help_parser(client, chat_id, text, keyboard=None):
     if not keyboard:
         LOGGER.info("Helpable length when calling /help: {}".format(len(HELPABLE)))
         keyboard = paginate_modules(0, HELPABLE, "help")
-    await client.send_message(chat_id, text, reply_markup=keyboard)
+    await client.send_message(
+        chat_id,
+        text,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+        reply_markup=keyboard,
+    )
 
 
 @Client.on_message(custom_filter.command(commands="help", disable=True))
@@ -147,9 +162,19 @@ async def help_button(client, callback_query):
             pass
         parent = _parent_module(module)
         back_data = f"help_back({parent})" if parent else "help_back"
-        buttons.append([InlineKeyboardButton(text="Back ", callback_data=back_data)])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="Back ", callback_data=back_data, style=ButtonStyle.PRIMARY
+                )
+            ]
+        )
         try:
-            await callback_query.message.edit(text=html.escape(text), reply_markup=InlineKeyboardMarkup(buttons), link_preview_options=LinkPreviewOptions(is_disabled=True))
+            await callback_query.message.edit(
+                text=format_help_text(text),
+                reply_markup=InlineKeyboardMarkup(buttons),
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
         except BadRequest:
             pass
         return await callback_query.answer()
@@ -205,17 +230,23 @@ async def module_page(client, module: str, message, edit: bool = False):
 
     parent = _parent_module(module)
     back_data = f"help_back({parent})" if parent else "help_back"
-    buttons.append([InlineKeyboardButton(text="Back ", callback_data=back_data)])
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text="Back ", callback_data=back_data, style=ButtonStyle.PRIMARY
+            )
+        ]
+    )
 
     if edit:
         await message.edit(
-            text=html.escape(text),
+            text=format_help_text(text),
             reply_markup=InlineKeyboardMarkup(buttons),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     else:
         await message.reply(
-            text=html.escape(text),
+            text=format_help_text(text),
             reply_markup=InlineKeyboardMarkup(buttons),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )

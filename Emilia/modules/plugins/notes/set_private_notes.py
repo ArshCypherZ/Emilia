@@ -24,7 +24,7 @@ async def PrivateNote(client, message):
         if command[1] in PRIVATE_NOTES_TRUE:
             await message.reply(
                 f"{BOT_NAME} will now send a message to your chat with a button redirecting to PM, where the user will receive the note.",
-                )
+            )
             await set_private_note(chat_id, True)
 
         elif command[1] in PRIVATE_NOTES_FALSE:
@@ -36,13 +36,11 @@ async def PrivateNote(client, message):
         else:
             await message.reply(
                 f"failed to get boolean value from input: expected one of y/yes/on/true or n/no/off/false; got: {message.text.split()[1]}",
-                )
+            )
     else:
         if await is_pnote_on(chat_id):
             await message.reply(
                 f"Your notes are currently being sent in private. {BOT_NAME} will send a small note with a button which redirects to a private chat.",
-                )
-        else:
-            await message.reply(
-                "Your notes are currently being sent in the group."
             )
+        else:
+            await message.reply("Your notes are currently being sent in the group.")

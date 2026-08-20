@@ -1,12 +1,15 @@
 import asyncio
 
 from pyrogram.enums import ChatType
+from pyrogram.errors import FloodWait
 
 import Emilia.strings as strings
 from Emilia.custom_filter import listen, register
 from Emilia.helper.admins import is_admin
+from Emilia.utils.decorators import rate_limit, RATE_LIMIT_SUPER_HEAVY
 
 
+@rate_limit(RATE_LIMIT_SUPER_HEAVY)
 async def _mentionall(client, message):
     if message.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
         return await message.reply_text(strings.is_pvt)
@@ -27,18 +30,29 @@ async def _mentionall(client, message):
     usrtxt = ""
     async for member in client.get_chat_members(message.chat.id):
         usr = member.user
+        if getattr(usr, "is_deleted", False):
+            continue
+
         usrnum += 1
-        first_name = (usr.first_name).replace("[", "").replace("]", "")
+        first_name = (usr.first_name or "Unknown").replace("[", "").replace("]", "")
         usrtxt += f"[{first_name}](tg://user?id={usr.id}) "
         if usrnum == 5:
-            await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
-            await asyncio.sleep(3)
+            try:
+                await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
+            except FloodWait as e:
+                await asyncio.sleep(e.value + 1)
+                await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
+            await asyncio.sleep(5)
             usrnum = 0
             usrtxt = ""
 
     # flush the final partial batch (member count not a multiple of 5)
     if usrtxt:
-        await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
+        try:
+            await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+            await client.send_message(message.chat.id, f"{usrtxt}\n\n{text}")
 
 
 @register(pattern="all")

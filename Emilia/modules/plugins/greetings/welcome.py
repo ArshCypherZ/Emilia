@@ -37,9 +37,7 @@ async def Welcome(client, message):
         GetWelcomeArg = message.text.split()[1]
         if GetWelcomeArg in WELCOME_TRUE:
             await SetWelcomeMessageOnOff(chat_id, welcome_message=True)
-            await message.reply(
-                "I'll be welcoming all new members from now on!"
-            )
+            await message.reply("I'll be welcoming all new members from now on!")
 
         elif GetWelcomeArg in WELCOME_FALSE:
             await SetWelcomeMessageOnOff(chat_id, welcome_message=False)

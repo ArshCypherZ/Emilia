@@ -461,10 +461,16 @@ async def _leaderboard(client, message):
         lmao += "\nUse /register to setup your names."
 
         # Buttons
-        buttons = InlineKeyboardMarkup([[
-            InlineKeyboardButton("Global Leaderboard", callback_data="gleaderboard_"),
-            InlineKeyboardButton("》", callback_data="chatlb_10"),
-        ]])
+        buttons = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "Global Leaderboard", callback_data="gleaderboard_"
+                    ),
+                    InlineKeyboardButton("》", callback_data="chatlb_10"),
+                ]
+            ]
+        )
     else:
         lmao += (
             "No data for this chat. Try /register to register yourself in bot first!"
@@ -500,7 +506,9 @@ async def chat_lb_callback(client, query):
 
     buttons = []
     if offset >= 10:
-        buttons.append(InlineKeyboardButton("《", callback_data=f"chatlb_{offset - 10}"))
+        buttons.append(
+            InlineKeyboardButton("《", callback_data=f"chatlb_{offset - 10}")
+        )
     buttons.append(InlineKeyboardButton("》", callback_data=f"chatlb_{offset + 10}"))
     await query.edit_message_text(lmao, reply_markup=InlineKeyboardMarkup([buttons]))
 

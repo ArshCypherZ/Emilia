@@ -3,7 +3,7 @@ __mod_name__ = "Fillings"
 __hidden__ = True
 
 __help__ = """
-You can also customise the contents of your message with contextual data. For example, you could mention a user by name in the welcome message, or mention them in a filter!
+> You can also customise the contents of your message with contextual data. For example, you could mention a user by name in the welcome message, or mention them in a filter!
 
 **Supported fillings**:
 • {first}: The user's first name.

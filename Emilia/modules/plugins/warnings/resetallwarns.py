@@ -1,6 +1,7 @@
 import html
 
 from pyrogram import Client, enums, filters
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 import Emilia.strings as strings
@@ -38,10 +39,18 @@ async def reset_all_warns(client, message, do=False):
         [
             [
                 InlineKeyboardButton(
-                    text="Reset all warnings", callback_data="resetwarns_confirm"
+                    text="Reset all warnings",
+                    callback_data="resetwarns_confirm",
+                    style=ButtonStyle.DANGER,
                 )
             ],
-            [InlineKeyboardButton(text="Cancel", callback_data="resetwarns_cancel")],
+            [
+                InlineKeyboardButton(
+                    text="Cancel",
+                    callback_data="resetwarns_cancel",
+                    style=ButtonStyle.PRIMARY,
+                )
+            ],
         ]
     )
     await message.reply(
@@ -49,7 +58,7 @@ async def reset_all_warns(client, message, do=False):
             f"Are you sure you want to reset **ALL** warnings in {html.escape(chat_title)}? This action cannot be undone."
         ),
         reply_markup=buttons,
-        )
+    )
 
 
 @Client.on_callback_query(

@@ -12,7 +12,7 @@ async def Welcomefillings(message, message_text, NewUserJson):
         username = NewUserJson.username if NewUserJson.username else NewUserJson.mention
         mention = NewUserJson.mention
         chat_title = html.escape(message.chat.title)
-        count = (await message._client.get_chat(message.chat.id)).members_count
+        count = await message._client.get_chat_members_count(message.chat.id)
 
         if "{id}" in message_text:
             message_text = message_text.replace("{id}", str(user_id))

@@ -1,5 +1,4 @@
 import asyncio
-import html
 import secrets
 import time
 import traceback
@@ -11,6 +10,7 @@ from pyrogram import Client, enums, filters
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import RPCError
 from pyrogram.errors.exceptions.forbidden_403 import ChatWriteForbidden
+from pyrogram.handlers import CallbackQueryHandler
 from pyrogram.types import (LinkPreviewOptions,
     CallbackQuery,
     ChatMemberUpdated,
@@ -18,13 +18,14 @@ from pyrogram.types import (LinkPreviewOptions,
     InlineKeyboardMarkup,
 )
 
-from Emilia import BOT_ID, EVENT_LOGS, LOGGER, db, pgram, redis_client
+from Emilia import BOT_ID, LOGGER, db, pgram, redis_client
 from Emilia.helper.chat_status import anon_admin_checker
 from Emilia.helper.get_data import GetChat
 from Emilia.mongo.chats_settings_mongo import get_anon_setting_cached
 from Emilia.mongo.connection_mongo import GetConnectedChat
 from Emilia.strings import error_messages
 from Emilia.utils.cache import SimpleCache
+from Emilia.utils.errors import forward_traceback
 
 # Rate Limit Constants
 # (requests, window_seconds)
@@ -80,16 +81,9 @@ def exception(func):
             if error_message is None:
                 error_message = "Something went wrong — the error has been logged."
                 LOGGER.exception(f"Unhandled error in {func.__name__}")
-                try:
-                    tb = html.escape(traceback.format_exc()[-3500:])
-                    await pgram.send_message(
-                        chat_id=EVENT_LOGS,
-                        text=f"#UNHANDLED_ERROR\nfunc: {func.__name__}\n\n<pre>{tb}</pre>",
-                    )
-                except Exception:
-                    LOGGER.warning(
-                        f"{func.__name__}: failed to forward traceback to log channel"
-                    )
+                await forward_traceback(
+                    "unhandled", traceback.format_exc(), f"func: {func.__name__}"
+                )
 
             if (
                 isinstance(e, RPCError)
@@ -275,6 +269,7 @@ def log_to_channel(func):
         await pgram.send_message(
             channel_id, log_message, link_preview_options=LinkPreviewOptions(is_disabled=True)
         )
+        return result
 
     return wrapper
 
@@ -409,6 +404,36 @@ async def NewMemer(client: Client, message: ChatMemberUpdated):
 _rate_limit_redis_warned = False
 
 
+async def check_rate_limit_zset(
+    key: str, max_actions: int, window_seconds: int
+) -> tuple[bool, int]:
+    """
+    Shared sliding-window limiter using Redis ZSET.
+
+    Returns (allowed, request_count). Fails open: if Redis is unreachable,
+    returns (True, 0) so the action proceeds rather than being silently dropped.
+    """
+    global _rate_limit_redis_warned
+    current_time = time.time()
+
+    pipe = redis_client.pipeline()
+    pipe.zremrangebyscore(key, 0, current_time - window_seconds)
+    pipe.zcard(key)
+    pipe.zadd(key, {str(current_time): current_time})
+    pipe.expire(key, window_seconds + 1)
+
+    try:
+        results = await pipe.execute()
+    except redis.exceptions.RedisError as e:
+        if not _rate_limit_redis_warned:
+            LOGGER.error(f"Rate limiter Redis error, failing open: {e}")
+            _rate_limit_redis_warned = True
+        return True, 0
+
+    request_count = results[1]
+    return request_count < max_actions, request_count
+
+
 def rate_limit(limit_config=RATE_LIMIT_GENERAL):
     """
     Decorator that limits the rate at which a function can be called using Redis.
@@ -425,30 +450,13 @@ def rate_limit(limit_config=RATE_LIMIT_GENERAL):
                 return await func(*args, **kwargs)
             user_id = user.id
 
-            current_time = time.time()
             key = f"rate_limit:{BOT_ID}:{user_id}:{func.__name__}"
 
-            # Redis Pipeline for atomic operations
-            pipe = redis_client.pipeline()
-            pipe.zremrangebyscore(key, 0, current_time - window_seconds)
-            pipe.zcard(key)
-            pipe.zadd(key, {str(current_time): current_time})
-            pipe.expire(key, window_seconds + 1)
-            try:
-                results = await pipe.execute()
-            except redis.exceptions.RedisError as e:
-                # Fail open: if the rate-limit backend is unavailable, run the
-                # command anyway rather than dropping it silently. Log once.
-                global _rate_limit_redis_warned
-                if not _rate_limit_redis_warned:
-                    LOGGER.error(f"Rate limiter Redis error, failing open: {e}")
-                    _rate_limit_redis_warned = True
-                return await func(*args, **kwargs)
+            allowed, request_count = await check_rate_limit_zset(
+                key, messages_per_window, window_seconds
+            )
 
-            # results[1] is the count of timestamps already in the window
-            request_count = results[1]
-
-            if request_count >= messages_per_window:
+            if not allowed:
                 LOGGER.warning(
                     f"Rate limit exceeded for user {user_id}. Allowed {messages_per_window} updates in {window_seconds} seconds for {func.__name__}"
                 )
@@ -462,7 +470,7 @@ def rate_limit(limit_config=RATE_LIMIT_GENERAL):
                         pass
                 return
 
-            await func(*args, **kwargs)
+            return await func(*args, **kwargs)
 
         return wrapper
 

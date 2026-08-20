@@ -9,6 +9,7 @@ import time
 
 import psutil
 from pyrogram.enums import ParseMode
+from pyrogram.types import LinkPreviewOptions
 
 from Emilia import LOGGER, db, redis_client
 from Emilia.custom_filter import auth
@@ -147,6 +148,43 @@ async def _errors_section() -> str:
     )
 
 
+async def _music_section() -> str:
+    try:
+        import inspect
+        from typing import Any
+        from Emilia.modules.plugins.music.core.call import emilia_call
+        from Emilia import redis_client
+        
+        calls: Any = getattr(emilia_call, "calls", [])
+        if inspect.iscoroutine(calls):
+            calls = await calls
+        elif callable(calls):
+            res = calls()
+            if inspect.iscoroutine(res):
+                calls = await res
+            else:
+                calls = res
+                
+        active_vcs = len(calls) if calls else 0
+        
+        f_keys = await redis_client.keys("music_file:*")
+        m_keys = await redis_client.keys("music_meta:*")
+        q_keys = await redis_client.keys("music_q:queue:*")
+        
+        cached_files = len(f_keys) if f_keys else 0
+        cached_meta = len(m_keys) if m_keys else 0
+        queued_chats = len(q_keys) if q_keys else 0
+
+        stats = (
+            "<b>🎵 Music System</b>\n"
+            f"• Active VC: <code>{active_vcs}</code> | Queued Chats: <code>{queued_chats}</code>\n"
+            f"• Cached Songs: <code>{cached_files}</code> | Meta Cache: <code>{cached_meta}</code>"
+        )
+        return stats
+    except Exception:
+        return "<b>🎵 Music System:</b> <code>n/a</code>"
+
+
 @auth(pattern="devstats")
 async def devstats(client, message):
     # DEV_USERS-gated by @auth — do not loosen.
@@ -156,6 +194,7 @@ async def devstats(client, message):
         _uptime_section,
         _system_section,
         _clones_section,
+        _music_section,
         _usage_section,
         _errors_section,
         _db_section,
@@ -169,7 +208,9 @@ async def devstats(client, message):
     text = "\n\n".join(sections)
     try:
         await msg.edit_text(
-            text, parse_mode=ParseMode.HTML, disable_web_page_preview=True
+            text,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception:
         await msg.edit_text("Stats too long or render failed — check logs.")

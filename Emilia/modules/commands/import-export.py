@@ -2,7 +2,7 @@ import io
 
 import orjson
 from bson import ObjectId
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 import Emilia.strings as strings
@@ -162,12 +162,18 @@ async def reset_settings(client, message):
             [
                 [
                     InlineKeyboardButton(
-                        "Confirm reset", callback_data=f"chatreset_yes:{chat_id}"
+                        "Confirm reset",
+                        callback_data=f"chatreset_yes:{chat_id}",
+                        style=ButtonStyle.DANGER,
                     ),
+                ],
+                [
                     InlineKeyboardButton(
-                        "Cancel", callback_data="chatreset_no"
+                        "Cancel",
+                        callback_data="chatreset_no",
+                        style=ButtonStyle.PRIMARY,
                     ),
-                ]
+                ],
             ]
         ),
     )

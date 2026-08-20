@@ -28,13 +28,13 @@ async def Captcha(client, message):
     if not await isBotCan(message, privileges="can_restrict_members", silent=True):
         await message.reply(
             "I need to be admin with the right to restrict to enable CAPTCHAs.",
-            )
+        )
         return
 
     if not await isUserCan(message, privileges="can_restrict_members", silent=True):
         await message.reply(
             "You need to be admin with the right to restrict to enable CAPTCHAs.",
-            )
+        )
         return
 
     if len(message.text.split()) >= 2:
@@ -43,14 +43,12 @@ async def Captcha(client, message):
         if get_args in CAPTCHA_WELCOME_TRUE:
             await message.reply(
                 "CAPTCHAs have been enabled. I will now mute people when they join.",
-                )
+            )
             captcha = True
             await SetCaptcha(chat_id, captcha)
 
         elif get_args in CAPTCHA_WELCOME_FALSE:
-            await message.reply(
-                "CAPTCHAs have been disabled. Users can join normally."
-            )
+            await message.reply("CAPTCHAs have been disabled. Users can join normally.")
             captcha = False
             await SetCaptcha(chat_id, captcha)
 
@@ -65,4 +63,4 @@ async def Captcha(client, message):
                 f"{CaptchaSetting}\n\n"
                 "To change this setting, try this command again followed by one of yes/no/on/off"
             ),
-            )
+        )

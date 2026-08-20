@@ -9,6 +9,7 @@ import Emilia.strings as strings
 from Emilia import DEV_USERS, db
 from Emilia.helper.get_data import GetChat
 from Emilia.utils.decorators import *
+from Emilia.helper.chat_status import get_chat_member_cached, _status, _priv
 
 cache_collection = db.admincache
 
@@ -181,15 +182,15 @@ async def can_add_admins(event, user_id, chat_id=None):
     client = _get_client(event)
     try:
         target_chat = chat_id if chat_id is not None else event.chat.id
-        member = await client.get_chat_member(target_chat, user_id)
+        member = await get_chat_member_cached(client, target_chat, user_id)
     except UserNotParticipant:
         return False
 
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
 
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_promote_members:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_promote_members"):
             await event.reply_text(strings.CAN_PROMOTE)
             return False
         return True
@@ -202,13 +203,13 @@ async def can_add_admins(event, user_id, chat_id=None):
 async def cb_can_add_admins(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.message.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.message.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_promote_members:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_promote_members"):
             await event.answer(strings.CAN_PROMOTE, show_alert=True)
             return False
         return True
@@ -225,13 +226,13 @@ async def can_ban_users(event, user_id, chat_id=None):
     else:
         chat_id = event.chat.id
     try:
-        member = await client.get_chat_member(chat_id, user_id)
+        member = await get_chat_member_cached(client, chat_id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_restrict_members:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_restrict_members"):
             await event.reply_text(strings.CAN_BAN)
             return False
         return True
@@ -243,13 +244,13 @@ async def can_ban_users(event, user_id, chat_id=None):
 async def cb_can_ban_users(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.message.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.message.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_restrict_members:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_restrict_members"):
             await event.answer(strings.CAN_BAN, show_alert=True)
             return False
         return True
@@ -267,13 +268,13 @@ async def can_change_info(event, user_id, chat_id=None):
         chat_id = event.chat.id
 
     try:
-        member = await client.get_chat_member(chat_id, user_id)
+        member = await get_chat_member_cached(client, chat_id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_change_info:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_change_info"):
             await event.reply_text(strings.CAN_CHANGE_INFO)
             return False
         return True
@@ -285,13 +286,13 @@ async def can_change_info(event, user_id, chat_id=None):
 async def cb_can_change_info(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.message.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.message.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_change_info:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_change_info"):
             await event.answer(strings.CAN_CHANGE_INFO, show_alert=True)
             return False
         return True
@@ -310,10 +311,10 @@ async def is_owner(event, user_id, chat_id=None):
         chat_id = event.chat.id
         title = event.chat.title
     try:
-        member = await client.get_chat_member(chat_id, user_id)
+        member = await get_chat_member_cached(client, chat_id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
     else:
         await event.reply_text(f"You need to be the chat owner of {title} to do this.")
@@ -323,10 +324,10 @@ async def is_owner(event, user_id, chat_id=None):
 async def cb_is_owner(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.message.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.message.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
     else:
         await event.answer(
@@ -339,13 +340,13 @@ async def cb_is_owner(event, user_id):
 async def can_delete_msg(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_delete_messages:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_delete_messages"):
             await event.reply_text(strings.CAN_DELETE)
             return False
         return True
@@ -366,23 +367,12 @@ async def is_admin(event, user_id, pm_mode: bool = False, chat_id=None):
     if not pm_mode and event.chat.type == ChatType.PRIVATE and chat_id is None:
         return True
 
-    cached_admin_status = await get_admin_cache(event, user_id)
-    if cached_admin_status is not None and chat_id is None:
-        # Only use cache when operating on event.chat.id
-        return cached_admin_status
-
     try:
-        member = await client.get_chat_member(target_chat, user_id)
+        member = await get_chat_member_cached(client, target_chat, user_id)
     except UserNotParticipant:
         return False
 
-    is_admin_flag = member.status in (
-        ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.OWNER,
-    )
-
-    if chat_id is None:
-        await update_admin_cache(target_chat, user_id, is_admin_flag)
+    is_admin_flag = _status(member) in ("ADMINISTRATOR", "OWNER")
 
     return is_admin_flag
 
@@ -417,10 +407,10 @@ async def update_admin_cache(chat_id, user_id, is_admin):
 async def cb_is_admin(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.message.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.message.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+    if _status(member) in ("ADMINISTRATOR", "OWNER"):
         return True
     else:
         await event.answer(strings.NOT_ADMIN, show_alert=True)
@@ -430,13 +420,13 @@ async def cb_is_admin(event, user_id):
 async def can_manage_topics(event, user_id):
     client = _get_client(event)
     try:
-        member = await client.get_chat_member(event.chat.id, user_id)
+        member = await get_chat_member_cached(client, event.chat.id, user_id)
     except UserNotParticipant:
         return False
-    if member.status == ChatMemberStatus.OWNER or user_id in DEV_USERS:
+    if _status(member) == "OWNER" or user_id in DEV_USERS:
         return True
-    elif member.status == ChatMemberStatus.ADMINISTRATOR:
-        if not member.privileges.can_manage_topics:
+    elif _status(member) == "ADMINISTRATOR":
+        if not _priv(member, "can_manage_topics"):
             await event.reply_text(strings.NOT_TOPIC)
             return False
         return True

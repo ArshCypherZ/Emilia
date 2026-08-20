@@ -42,9 +42,7 @@ async def Welcome(client, message):
         GetWelcomeArg = command[1]
         if GetWelcomeArg in GOODBYE_TRUE:
             await SetGoodbyeMessageOnOff(chat_id, goodbye_message=True)
-            await message.reply(
-                "I'll be saying goodbye to any leavers from now on!"
-            )
+            await message.reply("I'll be saying goodbye to any leavers from now on!")
 
         elif GetWelcomeArg in GOODBYE_FALSE:
             await SetGoodbyeMessageOnOff(chat_id, goodbye_message=False)

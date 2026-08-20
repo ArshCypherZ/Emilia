@@ -41,7 +41,5 @@ async def set_rules(client, message):
 
     get_rules = message.text.markdown[len(message.text.split()[0]) + 2 :]
     await set_rules_db(chat_id, get_rules)
-    await message.reply(
-        f"New rules for {html.escape(chat_title)} set successfully!"
-    )
+    await message.reply(f"New rules for {html.escape(chat_title)} set successfully!")
     return "NEW_RULES", None, None

@@ -27,7 +27,7 @@ async def CleanWelcome(client, message):
             await SetCleanWelcome(chat_id, clean_welcome)
             await message.reply(
                 "I'll be deleting all old welcome/goodbye messages from now on!",
-                )
+            )
 
         elif get_args in CLEAN_WELCOME_FALSE:
             clean_welcome = False
@@ -47,4 +47,4 @@ async def CleanWelcome(client, message):
                 f"{CleanMessage}\n\n"
                 "To change this setting, try this command again followed by one of yes/no/on/off"
             ),
-            )
+        )

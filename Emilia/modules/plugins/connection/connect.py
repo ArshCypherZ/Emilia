@@ -1,7 +1,7 @@
 import html
 
 from pyrogram import Client
-from pyrogram.enums import ChatType
+from pyrogram.enums import ButtonStyle, ChatType
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyParameters
 
 from Emilia import BOT_USERNAME, custom_filter
@@ -29,9 +29,7 @@ async def Connect(client, message):
 
         chat_title = await GetChat(int(chat_id), client)
         if chat_title is None:
-            await message.reply(
-                "failed to connect to chat!\nError: `chat not found`"
-            )
+            await message.reply("failed to connect to chat!\nError: `chat not found`")
         else:
             await connect_button(client, message, int(chat_id))
     else:
@@ -44,6 +42,7 @@ async def Connect(client, message):
                         InlineKeyboardButton(
                             text="Connect to chat",
                             url=f"http://t.me/{BOT_USERNAME}?start=connect_{chat_id}",
+                            style=ButtonStyle.SUCCESS,
                         )
                     ]
                 ]

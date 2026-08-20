@@ -109,6 +109,7 @@ CLONE_LIMIT = Config.CLONE_LIMIT
 CLONES_PER_USER = Config.CLONES_PER_USER
 CLONE_PREMIUM_ENABLED = Config.CLONE_PREMIUM_ENABLED
 CLONE_PREMIUM_STARS = Config.CLONE_PREMIUM_STARS
+SESSION_STRING = Config.SESSION_STRING
 
 TRIGGERS = ("/", "!")
 ANILIST_CLIENT = Config.ANILIST_CLIENT
@@ -494,5 +495,21 @@ async def create_indexes():
     # quietfed flag is stored on the feds collection keyed by chat_id
     # (federations.py)
     await feds.create_index([("chat_id", 1)])
+
+    # Social playlists own their index set (see mongo/playlists_mongo.py).
+    try:
+        from Emilia.mongo.playlists_mongo import create_playlist_indexes
+
+        await create_playlist_indexes()
+    except Exception as e:
+        LOGGER.warning(f"Playlist indexes: {e}")
+
+    # Content requests indexes (see mongo/requests_mongo.py)
+    try:
+        from Emilia.mongo.requests_mongo import create_request_indexes
+
+        await create_request_indexes()
+    except Exception as e:
+        LOGGER.warning(f"Request indexes: {e}")
 
     LOGGER.info("Database indexes created successfully.")

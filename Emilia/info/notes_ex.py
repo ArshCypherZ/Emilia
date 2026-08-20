@@ -3,7 +3,7 @@ __mod_name__ = "Example for usage"
 __hidden__ = True
 
 __help__ = """
-Notes can seem quite complicated; so here are some examples, so you can get some inspiration.
+> Notes can seem quite complicated; so here are some examples, so you can get some inspiration.
 
 **Examples**:
 

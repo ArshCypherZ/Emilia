@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
     zip \
     curl \
     ca-certificates \
+    gnupg \
+ && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y nodejs \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -18,7 +21,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN useradd -m emilia && chown -R emilia /app
+RUN mkdir -p /app/sessions && useradd -m emilia && chown -R emilia /app
 USER emilia
 
 STOPSIGNAL SIGTERM

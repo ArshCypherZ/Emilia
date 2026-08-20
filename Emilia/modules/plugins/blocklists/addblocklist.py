@@ -53,7 +53,7 @@ async def add_blocklist(client, message):
             if not tokens:
                 await message.reply(
                     "Reply to a message containing custom emoji to blocklist its emoji pack.",
-                    )
+                )
                 return
         else:
             token = emojipack_token(normalized)
@@ -67,7 +67,7 @@ async def add_blocklist(client, message):
                 "s" if len(tokens) != 1 else "",
                 ", ".join(f"`{token}`" for token in sorted(tokens)),
             ),
-            )
+        )
         return
 
     await add_blocklist_db(chat_id, text, reason)

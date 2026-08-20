@@ -2,6 +2,7 @@ import html
 
 from pyrogram import Client
 from pyrogram.errors import BadRequest
+from pyrogram.enums import ParseMode
 from pyrogram.types import ChatPermissions
 
 from Emilia import BOT_ID, custom_filter
@@ -52,13 +53,15 @@ async def mute(client, message):
         message_id = message.id
 
     if not message.text.split()[0].find("smute") >= 0:
-        text = f"{user_info.mention} is muted now in {html.escape(chat_title)}.\n"
+        actor_html = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>"
+        target_html = f"<a href='tg://user?id={user_info.id}'>{user_info.first_name}</a>"
+        text = f"Yep! {target_html} has been muted by {actor_html}!"
 
         reason = await get_text(message)
         if reason:
-            text += f"Reason: {reason}"
+            text += f"\n\n<blockquote expandable>{html.escape(reason)}</blockquote>"
 
-        await message.reply(text)
+        await message.reply(text, parse_mode=ParseMode.HTML)
 
     # Deletaion of message according to user admin command
     if message_id is not None:

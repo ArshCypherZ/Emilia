@@ -5,7 +5,7 @@ __mod_name__ = "Lock descriptions"
 __hidden__ = True
 
 __help__ = f"""
-There are lots of different locks, and some of them might not be super clear; this section aims to explain each kind of lock.
+> There are lots of different locks, and some of them might not be super clear; this section aims to explain each kind of lock.
 
 **Types**:
 
@@ -43,5 +43,8 @@ There are lots of different locks, and some of them might not be super clear; th
 • outsidereaction: Reactions from users who are not members of the group.
 • guestbot: Messages sent through Telegram guest bots. Allowlist trusted guest bots if needed.
 • emojicustom: Messages containing custom emoji. Use `/allowlist emojipack:<>` while replying to a custom emoji message to allow a pack.
+• spoiler: Messages containing spoiler formatting (often used to hide spam links).
+• format: Messages containing markdown formatting like bold, italic, underline, strikethrough, or blockquote.
+• code: Messages containing monospace/code formatting.
 
 """

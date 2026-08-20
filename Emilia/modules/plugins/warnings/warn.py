@@ -1,3 +1,4 @@
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from Emilia import BOT_ID
@@ -40,21 +41,27 @@ async def warn(client, message, reason, silent=False, warn_user=None):
     countuser_warn = await count_user_warn(chat_id, user_id)
     warnlimit = await warn_limit(chat_id)
 
-    warn_text = f"User {user_info.mention} has {countuser_warn}/{warnlimit} warnings; gotta be careful from now on!\n"
+    import html
+    actor_html = f"<a href='tg://user?id={admin_id}'>Admin</a>" if admin_id < 0 else f"<a href='tg://user?id={admin_id}'>{html.escape(message.from_user.first_name)}</a>"
+    target_html = f"<a href='tg://user?id={user_id}'>{html.escape(user_info.first_name)}</a>"
+    
+    warn_text = f"Yep! {target_html} has been warned by {actor_html}!\n• <b>Count:</b> <code>{countuser_warn}/{warnlimit}</code>"
     if reason:
-        warn_text += f"**Reason:**\n{reason}"
+        warn_text += f"\n\n<blockquote expandable>{html.escape(reason)}</blockquote>"
 
     button = [
         [
             InlineKeyboardButton(
                 text="Remove warn (admin only)",
                 callback_data=f"warn_{user_id}_{countuser_warn}",
+                style=ButtonStyle.DANGER,
             )
         ]
     ]
 
     if not silent:
+        from pyrogram.enums import ParseMode
         await client.send_message(
-            message.chat.id, text=warn_text, reply_markup=InlineKeyboardMarkup(button)
+            message.chat.id, text=warn_text, reply_markup=InlineKeyboardMarkup(button), parse_mode=ParseMode.HTML
         )
     return True, log_msg, user_info

@@ -30,7 +30,7 @@ async def set_rules(client, message):
         current_rules_button = await get_rules_button(chat_id)
         return await message.reply(
             f"The rules button will be called:\n `{current_rules_button}`\n\nTo change the button name, try this command again followed by the new name",
-            )
+        )
 
     rules_button = " ".join(command[1:])
 

@@ -41,9 +41,7 @@ async def setWarnLimit(client, message):
 
     warn_limit_arg = message.text.split()[1]
     if not warn_limit_arg.isdigit():
-        return await message.reply(
-            f"{warn_limit_arg} is not a valid integer."
-        )
+        return await message.reply(f"{warn_limit_arg} is not a valid integer.")
 
     if int(warn_limit_arg) > 50:
         return await message.reply("The maximum warning limit is 50.")
@@ -55,5 +53,5 @@ async def setWarnLimit(client, message):
 
     await message.reply(
         f"Warn limit settings for {html.escape(chat_title)} has been updated to {warn_limit_arg}.",
-        )
+    )
     await set_warn_limit_db(chat_id, int(warn_limit_arg))
